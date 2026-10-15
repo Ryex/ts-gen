@@ -223,6 +223,11 @@ pub struct DynamicUnionInfo {
     /// emit pass can render variants without re-running the
     /// member-set computation.
     pub members: Vec<TypeRef>,
+    /// Scope and module of the first use site. Members are lowered
+    /// against these, since a member can name a declaration that is
+    /// private to an ambient module.
+    pub scope: ScopeId,
+    pub from_module: ModuleContext,
 }
 
 impl DynamicUnionRegistry {
@@ -535,6 +540,8 @@ impl<'a> CodegenContext<'a> {
         members: &[TypeRef],
         anchor: &str,
         parent: Option<&str>,
+        scope: ScopeId,
+        from_module: &ModuleContext,
     ) -> String {
         let key = DynamicUnionKey(members.iter().map(format_type_ref_key).collect());
         if let Some(info) = self.dynamic_unions.borrow().by_key.get(&key) {
@@ -548,6 +555,8 @@ impl<'a> CodegenContext<'a> {
             DynamicUnionInfo {
                 rust_name: chosen.clone(),
                 members: members.to_vec(),
+                scope,
+                from_module: from_module.clone(),
             },
         );
         chosen
@@ -1157,14 +1166,23 @@ fn emit_type_name(
     ctx: &CodegenContext<'_>,
     from_module: &ModuleContext,
 ) -> TokenStream {
-    // Resolve through scope
-    let resolved = ctx.file_scopes.iter().find_map(|&scope| {
-        if name.contains('.') {
-            ctx.gctx.resolve_path(scope, name)
-        } else {
-            ctx.gctx.scopes.resolve(scope, name)
-        }
-    });
+    // A use site inside an ambient module also sees that module's private
+    // declarations, which live in its body scopes rather than a file scope.
+    let module_scopes = match from_module {
+        ModuleContext::Module(m) => ctx.gctx.ambient_module_scopes.get(m.as_ref()),
+        ModuleContext::Global => None,
+    };
+    let resolved = module_scopes
+        .into_iter()
+        .flatten()
+        .chain(&ctx.file_scopes)
+        .find_map(|&scope| {
+            if name.contains('.') {
+                ctx.gctx.resolve_path(scope, name)
+            } else {
+                ctx.gctx.scopes.resolve(scope, name)
+            }
+        });
 
     // Canonical ident name (last segment for dotted paths)
     let ident_name = name.rsplit('.').next().unwrap_or(name);
@@ -1540,7 +1558,7 @@ pub fn to_return_type(
     let inner = if let Some(ctx) = js_string_ctx {
         to_mono_js_string_return_type(ty, ctx, scope, from_module)
     } else if !is_async || mono_native_return {
-        match maybe_synthesise_return_union(ty, ctx, scope, anchor) {
+        match maybe_synthesise_return_union(ty, ctx, scope, from_module, anchor) {
             Some(tokens) => tokens,
             None => to_syn_type(ty, TypePosition::RETURN, ctx, scope, from_module),
         }
@@ -1827,14 +1845,16 @@ pub fn to_getter_return_type(
     from_module: &ModuleContext,
     anchor: ReturnAnchor<'_>,
 ) -> TokenStream {
-    if let Some(tokens) = maybe_synthesise_return_union(ty, ctx, scope, anchor) {
+    if let Some(tokens) = maybe_synthesise_return_union(ty, ctx, scope, from_module, anchor) {
         return tokens;
     }
     // For optional getters the IR widens to `Nullable<T>`. If the
     // inner `T` is itself a top-level erasing union, we still want
     // the synthesised enum — but wrapped in `Option<…>`.
     if let TypeRef::Nullable(inner) = ty {
-        if let Some(inner_tokens) = maybe_synthesise_return_union(inner, ctx, scope, anchor) {
+        if let Some(inner_tokens) =
+            maybe_synthesise_return_union(inner, ctx, scope, from_module, anchor)
+        {
             return quote! { Option<#inner_tokens> };
         }
     }
@@ -1903,6 +1923,7 @@ fn maybe_synthesise_return_union(
     ty: &TypeRef,
     ctx: Option<&CodegenContext<'_>>,
     scope: ScopeId,
+    from_module: &ModuleContext,
     anchor: ReturnAnchor<'_>,
 ) -> Option<TokenStream> {
     let property_key_members;
@@ -1920,7 +1941,13 @@ fn maybe_synthesise_return_union(
         return None;
     }
 
-    let name = cgctx.synthesise_dynamic_union(members, &anchor.enum_anchor(), anchor.parent);
+    let name = cgctx.synthesise_dynamic_union(
+        members,
+        &anchor.enum_anchor(),
+        anchor.parent,
+        scope,
+        from_module,
+    );
     let ident = make_ident(&name);
     Some(quote! { #ident })
 }
