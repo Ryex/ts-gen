@@ -1173,11 +1173,12 @@ ABIs in this mode: `Details<boolean>`, `Details<number>`, and `Details<string>`
 become `Details<bool>`, `Details<f64>`, and `Details<String>`. Aliases resolve
 first, so `Details<Id>` with `type Id = string` is also `Details<String>`, and
 a union with a single common type lowers as that type (`Details<"a" | "b">` is
-`Details<String>`). Aliases emitted as their own Rust type, such as
-string-literal enums, stay named (`Details<Mode>`). A type parameter that
-shadows an alias stays a type parameter. This native-leaf rule is deliberately
-limited to user declarations. Built-in JS containers, tuples, iterators, and
-callbacks retain their established wrapper elements (`Array<JsString>`,
+`Details<String>`). [Enums](#string-and-numeric-enums) are native leaves too,
+so they stay named (`Details<Mode>`, `Details<Level>`), and an awaited
+`Promise<Mode>` resolves to `Mode`. A type parameter that shadows an alias
+stays a type parameter. This native-leaf rule is deliberately limited to user
+declarations. Built-in JS containers, tuples, iterators, and callbacks retain
+their established wrapper elements (`Array<JsString>`,
 `Map<JsString, JsString>`, and so on).
 
 Direct string arguments use argument-position `impl JsStringLike`, allowing
@@ -1543,7 +1544,7 @@ interface EmailAttachment {
 emits:
 
 ```rust
-#[wasm_bindgen]
+#[wasm_bindgen(private)]
 pub enum EmailAttachmentContentKind {
     String(String),
     ArrayBuffer(ArrayBuffer),
@@ -1810,6 +1811,18 @@ not module specifiers — they're independent of the `--export`
 filter. The namespace lookup is one-deep; nested namespaces are not
 yet supported.
 
+Inside a module, a namespace's members are emitted flat into the
+module instead, while qualified references to them (`Codes.Region`,
+`Outer.Inner.Deep`, or `Inner.Deep` from within `Outer`) still resolve
+through the namespace. A qualified name that resolves to nothing
+erases to `JsValue` with an error rather than matching a local type
+by its last segment.
+
+A namespace merged with a same-named class, function or interface
+(`class Foo {}` + `namespace Foo { interface Options {} }`) leaves
+that declaration as the type `Foo`, while `Foo.Options` resolves
+through the namespace, in either declaration order.
+
 ## Type aliases and `export { X as Y }`
 
 * `type Foo = Bar;` → `pub type Foo = Bar;` if `Bar` is a recognised
@@ -1841,13 +1854,73 @@ yet supported.
 
 ```ts
 enum Color { Red = "red", Green = "green" }
+type Kind = "text" | "bytes";
 ```
 
-emits a `pub enum Color { Red, Green }` plus serde-aware `to_string` /
-`try_from_str` impls. `wasm-bindgen` doesn't handle string enums
-natively, so we lower these to Rust-side enums + a `JsValue` round-trip.
+Both a string `enum` and a type alias over string literals emit a
+wasm-bindgen string enum, whose variant discriminants are the JS
+string values:
 
-Numeric enums lower similarly with explicit discriminant values.
+```rust
+#[wasm_bindgen(private)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Color {
+    Red = "red",
+    Green = "green",
+}
+```
+
+Numeric enums lower similarly with explicit discriminant values and a
+`#[repr(u32)]` / `#[repr(i32)]` chosen from the value range.
+
+wasm-bindgen converts both kinds by value only, so unlike other named
+types they are not borrowed in argument position: `fn send(kind: Kind)`,
+`fn set_kind(this: &Opts, val: Kind)`, and optional properties still
+read back as `Option<Kind>`. This holds through aliases and qualified
+names (`NS.Kind`).
+
+Like primitives they cross the ABI natively rather than as a JS value, so
+they have no `JsGeneric` or slice form. An enum follows the primitive it
+carries wherever that primitive would not stay native: inside a
+`JsGeneric` position (`js_sys` containers, callbacks, erased local
+generics) it takes the primitive's wrapper, and in a slice the primitive
+itself:
+
+| TypeScript             | Rust                              |
+| ---------------------- | --------------------------------- |
+| `kinds: Kind[]`        | `&[String]` / `Vec<String>`       |
+| `levels: Level[]`      | `&[f64]` / `Vec<f64>`             |
+| `Promise<Kind>`        | `Promise<JsString>`               |
+| `Array<Level>`         | `Array<Number>`                   |
+| `(kind: Kind) => void` | `Function<fn(JsString) -> Undefined>` |
+| `Holder<Kind>`         | `Holder<JsString>`                |
+
+In [per-monomorphization mode](#in-scope-generic-type-parameters) a local
+generic argument and an awaited `Promise` are native positions, so there
+an enum stays named exactly as `string` stays `String`: `Holder<Kind>`,
+`Details<Option<Level>>`, `async fn next() -> Result<Kind, JsValue>`.
+Slices and `js_sys` containers are unchanged by the mode.
+
+`Kind::from_js_value(&value)` converts back. A
+[dynamic union](#erased-return-position-unions-become-dynamic-union-enums)
+carries an enum as a payload, `Kind | number` → `Kind(Kind)`, `F64(f64)`,
+dispatched through the enum's `TryFromJsValue`.
+
+Generated enums describe values on the JS side, not anything the crate
+exports, so every string enum, numeric enum and dynamic union is
+`#[wasm_bindgen(private)]`: wasm-bindgen keeps it off the JS module's
+exports and lets same-named private copies coexist in one build.
+wasm-bindgen still names enums by JS name across the whole crate, so an
+enum inside a namespace takes a namespace-prefixed `js_name`, which
+keeps it apart from a same-named enum elsewhere:
+
+```rust
+pub mod timing {
+    #[wasm_bindgen(private, js_name = "Timing_DurationUnit")]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DurationUnit { /* ... */ }
+}
+```
 
 ## Multiple-context name resolution
 

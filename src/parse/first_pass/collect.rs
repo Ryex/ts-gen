@@ -355,26 +355,15 @@ impl<'a> CollectCtx<'a> {
         scope: ScopeId,
         exported: bool,
     ) {
-        let stmts = namespace_block_statements(ns);
-        if matches!(parent_ctx, ir::ModuleContext::Module(_)) {
-            for stmt in stmts {
-                self.collect_statement(stmt, parent_ctx, scope, false);
-            }
-            return;
-        }
         let name = ns.id.name.to_string();
-        let ns_scope = if let Some(type_id) = self.gctx.scopes.get(scope).get(&name) {
-            let decl = self.gctx.get_type(type_id);
-            if let ir::TypeKind::Namespace(ns) = &decl.kind {
-                ns.child_scope
-            } else {
-                self.create_namespace_scope(&name, scope, false)
-            }
-        } else {
-            self.create_namespace_scope(&name, scope, exported)
+        // A namespace inside a module is emitted flat into the module,
+        // but still gets its own scope so `NS.Member` resolves.
+        let ns_scope = match self.gctx.scopes.get(scope).namespace(&name) {
+            Some(ns_scope) => ns_scope,
+            None => self.create_namespace_scope(&name, parent_ctx, scope, exported),
         };
-        for stmt in stmts {
-            self.collect_statement(stmt, &ir::ModuleContext::Global, ns_scope, false);
+        for stmt in namespace_block_statements(ns) {
+            self.collect_statement(stmt, parent_ctx, ns_scope, false);
         }
     }
 
@@ -402,15 +391,28 @@ impl<'a> CollectCtx<'a> {
     }
 
     /// Create a new namespace child scope and register it.
-    fn create_namespace_scope(&mut self, name: &str, scope: ScopeId, exported: bool) -> ScopeId {
+    fn create_namespace_scope(
+        &mut self,
+        name: &str,
+        ctx: &ir::ModuleContext,
+        scope: ScopeId,
+        exported: bool,
+    ) -> ScopeId {
         let ns_scope = self.gctx.scopes.create_child(scope);
+        self.gctx
+            .scopes
+            .insert_namespace(scope, name.to_string(), ns_scope);
+        // A same-named class, function or interface stays the name's type.
+        if self.gctx.scopes.get(scope).get(name).is_some() {
+            return ns_scope;
+        }
         let ns_type_id = self.gctx.insert_type(ir::TypeDeclaration {
             kind: ir::TypeKind::Namespace(ir::NamespaceDecl {
                 name: name.to_string(),
                 declarations: vec![],
                 child_scope: ns_scope,
             }),
-            module_context: ir::ModuleContext::Global,
+            module_context: ctx.clone(),
             doc: None,
             scope_id: scope,
             exported,
@@ -420,7 +422,7 @@ impl<'a> CollectCtx<'a> {
             name.to_string(),
             ir::TypeInfo {
                 kind: ir::RegisteredKind::Namespace,
-                primary_context: ir::ModuleContext::Global,
+                primary_context: ctx.clone(),
             },
         );
         ns_scope

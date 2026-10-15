@@ -393,7 +393,7 @@ fn generate_dynamic_unions(cgctx: &CodegenContext) -> TokenStream {
                 })
                 .collect();
             quote! {
-                #[wasm_bindgen]
+                #[wasm_bindgen(private)]
                 pub enum #enum_ident {
                     #(#variants),*
                 }
@@ -501,8 +501,8 @@ fn generate_declaration(
                 decl.scope_id,
             ))
         }
-        TypeKind::StringEnum(e) => Some(enums::generate_string_enum(e)),
-        TypeKind::NumericEnum(e) => Some(enums::generate_numeric_enum(e)),
+        TypeKind::StringEnum(e) => Some(enums::generate_string_enum(e, None)),
+        TypeKind::NumericEnum(e) => Some(enums::generate_numeric_enum(e, None)),
         TypeKind::Function(f) => Some(functions::generate_function(
             f,
             &decl.module_context,
@@ -583,10 +583,16 @@ fn generate_type_alias(
 
     // Resolve the target inside the alias's body scope so its own
     // type parameters bind locally (the alias is a scope-introducing
-    // construct in TS).
+    // construct in TS). An enum target has no inner form, so it is
+    // named directly.
+    let pos = if cgctx.enum_kind(&alias.target, alias.body_scope).is_some() {
+        typemap::TypePosition::RETURN
+    } else {
+        typemap::TypePosition::ARGUMENT.to_inner()
+    };
     let target = typemap::to_syn_type(
         &alias.target,
-        typemap::TypePosition::ARGUMENT.to_inner(),
+        pos,
         Some(cgctx),
         alias.body_scope,
         from_module,
@@ -700,8 +706,8 @@ fn generate_ns_declaration(
             &decl.doc,
             decl.scope_id,
         )),
-        TypeKind::StringEnum(e) => Some(enums::generate_string_enum(e)),
-        TypeKind::NumericEnum(e) => Some(enums::generate_numeric_enum(e)),
+        TypeKind::StringEnum(e) => Some(enums::generate_string_enum(e, Some(ns_js_name))),
+        TypeKind::NumericEnum(e) => Some(enums::generate_numeric_enum(e, Some(ns_js_name))),
         TypeKind::Variable(v) => Some(functions::generate_variable(
             v,
             &decl.module_context,

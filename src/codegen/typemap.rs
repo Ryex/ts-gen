@@ -612,6 +612,41 @@ impl<'a> CodegenContext<'a> {
         self.resolve_alias_impl(name, scope, &mut visited)
     }
 
+    /// The string or numeric enum declaration `ty` names, through aliases
+    /// and qualified paths.
+    pub(crate) fn enum_kind(&self, ty: &ir::TypeRef, scope: ScopeId) -> Option<&TypeKind> {
+        let ty = ty
+            .as_ident()
+            .and_then(|name| self.resolve_alias(name, scope))
+            .unwrap_or(ty);
+        let ir::TypeRef::Reference {
+            segments,
+            generic_args,
+        } = ty
+        else {
+            return None;
+        };
+        if !generic_args.is_empty() {
+            return None;
+        }
+        let id = self.gctx.resolve_path(scope, &segments.join("."))?;
+        let kind = &self.gctx.get_type(id).kind;
+        matches!(kind, TypeKind::StringEnum(_) | TypeKind::NumericEnum(_)).then_some(kind)
+    }
+
+    /// The primitive an enum reference carries on the JS side.
+    ///
+    /// wasm-bindgen enums cross the ABI natively, like primitives, with no
+    /// `JsGeneric` or slice support. Wherever a primitive would take its
+    /// `js_sys` wrapper, an enum takes the wrapper of this primitive; in a
+    /// slice it lowers as this primitive itself.
+    pub(crate) fn enum_repr(&self, ty: &ir::TypeRef, scope: ScopeId) -> Option<ir::TypeRef> {
+        match self.enum_kind(ty, scope)? {
+            TypeKind::StringEnum(_) => Some(ir::TypeRef::String),
+            _ => Some(ir::TypeRef::Number),
+        }
+    }
+
     fn resolve_alias_impl<'b>(
         &'b self,
         name: &str,
@@ -933,6 +968,8 @@ pub fn to_syn_type(
             if pos.inner {
                 generic_container(quote! { Array }, inner, pos, ctx, scope, from_module)
             } else {
+                let repr = ctx.and_then(|c| c.enum_repr(inner, scope));
+                let inner = repr.as_ref().unwrap_or(inner);
                 let elem = to_syn_type(inner, TypePosition::RETURN, ctx, scope, from_module);
                 if pos.is_argument() {
                     quote! { &[#elem] }
@@ -1080,6 +1117,12 @@ pub fn to_syn_type(
                     }
                 }
             }
+            if let Some(repr) = ctx.and_then(|c| c.enum_repr(ty, scope)) {
+                if pos.inner {
+                    return to_syn_type(&repr, pos, ctx, scope, from_module);
+                }
+                return lower_reference(segments, generic_args, pos, ctx, scope, from_module);
+            }
             maybe_ref(
                 lower_reference(segments, generic_args, pos, ctx, scope, from_module),
                 borrow,
@@ -1164,6 +1207,7 @@ fn is_jsvalue_arg(tokens: &TokenStream) -> bool {
 /// declaration's `module_context` drives qualification.
 fn emit_type_name(
     name: &str,
+    use_scope: Option<ScopeId>,
     ctx: &CodegenContext<'_>,
     from_module: &ModuleContext,
 ) -> TokenStream {
@@ -1173,16 +1217,22 @@ fn emit_type_name(
         ModuleContext::Module(m) => ctx.gctx.ambient_module_scopes.get(m.as_ref()),
         ModuleContext::Global => None,
     };
-    let resolved = module_scopes
-        .into_iter()
-        .flatten()
-        .chain(&ctx.file_scopes)
-        .find_map(|&scope| {
-            if name.contains('.') {
-                ctx.gctx.resolve_path(scope, name)
-            } else {
-                ctx.gctx.scopes.resolve(scope, name)
-            }
+    // A qualified path can name a namespace only visible from the use site,
+    // such as a sibling namespace inside the enclosing one.
+    let resolved = use_scope
+        .and_then(|scope| ctx.gctx.resolve_path(scope, name))
+        .or_else(|| {
+            module_scopes
+                .into_iter()
+                .flatten()
+                .chain(&ctx.file_scopes)
+                .find_map(|&scope| {
+                    if name.contains('.') {
+                        ctx.gctx.resolve_path(scope, name)
+                    } else {
+                        ctx.gctx.scopes.resolve(scope, name)
+                    }
+                })
         });
 
     // Canonical ident name (last segment for dotted paths)
@@ -1235,7 +1285,7 @@ fn emit_type_name(
         .or_else(|| {
             // Fallback: tests and entry points that don't construct a
             // full scope chain populate `local_types` by name.
-            if resolved.is_none() {
+            if resolved.is_none() && !name.contains('.') {
                 ctx.local_types.get(ident_name).cloned()
             } else {
                 None
@@ -1312,10 +1362,14 @@ fn emit_type_name(
         return quote! { #ident };
     }
 
-    // Truly unresolved — error + JsValue alias
+    // Truly unresolved — error + JsValue alias. A qualified name's last
+    // segment may be a local type's name, so it isn't aliased.
     ctx.error(format!(
         "Unresolved type `{name}`. Use --external to map this type."
     ));
+    if name.contains('.') {
+        return quote! { JsValue };
+    }
     ctx.register_external(ident_name, "JsValue");
     let ident = make_ident(ident_name);
     quote! { #ident }
@@ -1328,7 +1382,7 @@ fn named_type_to_rust(
     from_module: &ModuleContext,
 ) -> TokenStream {
     match ctx {
-        Some(ctx) => emit_type_name(name, ctx, from_module),
+        Some(ctx) => emit_type_name(name, None, ctx, from_module),
         // Without a codegen context (e.g. unit tests that exercise
         // type lowering directly) we can still resolve names that
         // appear in the `js_sys::*` glob — emit them as a bare ident.
@@ -1358,14 +1412,13 @@ fn lower_reference(
     scope: ScopeId,
     from_module: &ModuleContext,
 ) -> TokenStream {
-    // Qualified paths (more than one segment) are not yet resolved
-    // through the scope chain — we keep the dotted form for
-    // `emit_type_name` to consult the external map, then fall back
-    // to `JsValue` with a diagnostic for anything that doesn't match.
+    // Qualified paths resolve through namespace scopes from the use site;
+    // `emit_type_name` then consults the external map and falls back to
+    // `JsValue` with a diagnostic for anything that doesn't match.
     if segments.len() > 1 {
         let dotted = segments.join(".");
         return match ctx {
-            Some(c) => emit_type_name(&dotted, c, from_module),
+            Some(c) => emit_type_name(&dotted, Some(scope), c, from_module),
             None => quote! { JsValue },
         };
     }
@@ -1622,7 +1675,11 @@ fn peel_mono<'t>(
     current
 }
 
-fn is_mono_primitive(ty: &TypeRef) -> bool {
+/// Leaves that cross the ABI natively rather than as a JS handle: primitives
+/// and enums. A per-mono type parameter instantiated with one keeps it
+/// (`Holder<String>`, `Holder<Kind>`), where an erased `T: JsGeneric` would
+/// need its `js_sys` wrapper (`Holder<JsString>` for both).
+fn is_mono_native_leaf(ty: &TypeRef, ctx: &CodegenContext<'_>, scope: ScopeId) -> bool {
     matches!(
         ty,
         TypeRef::Boolean
@@ -1631,7 +1688,7 @@ fn is_mono_primitive(ty: &TypeRef) -> bool {
             | TypeRef::NumberLiteral(_)
             | TypeRef::String
             | TypeRef::StringLiteral(_)
-    )
+    ) || ctx.enum_kind(ty, scope).is_some()
 }
 
 /// The generic arguments of `ty` if it instantiates a locally declared
@@ -1653,8 +1710,9 @@ fn local_generic_args<'t>(ty: &'t TypeRef, ctx: &CodegenContext<'_>) -> Option<&
 }
 
 /// Lower an argument of a locally declared generic type in per-mono mode.
-/// Primitive leaves use their native Rust ABI, while built-in JS containers
-/// remain on the established inner-position wrapper mapping.
+/// Native leaves (primitives, enums) use their native Rust ABI, while
+/// built-in JS containers remain on the established inner-position wrapper
+/// mapping.
 fn to_mono_user_generic_arg(
     ty: &TypeRef,
     ctx: Option<&CodegenContext<'_>>,
@@ -1676,7 +1734,7 @@ fn to_mono_user_generic_arg_impl(
 ) -> TokenStream {
     let peeled = peel_mono(ty, ctx, scope, visited);
     match peeled.as_ref() {
-        t if is_mono_primitive(t) => {
+        t if is_mono_native_leaf(t, ctx, scope) => {
             to_syn_type(t, TypePosition::RETURN, Some(ctx), scope, from_module)
         }
         TypeRef::Nullable(inner) => {
@@ -1713,7 +1771,7 @@ fn is_mono_native_return_shape_impl(
 ) -> bool {
     let peeled = peel_mono(ty, ctx, scope, visited);
     match peeled.as_ref() {
-        t if is_mono_primitive(t) => true,
+        t if is_mono_native_leaf(t, ctx, scope) => true,
         TypeRef::Nullable(inner) => is_mono_native_return_shape_impl(inner, ctx, scope, visited),
         t => local_generic_args(t, ctx).is_some(),
     }
@@ -2745,6 +2803,9 @@ mod tests {
         type MaybeId = Id | null;
         type Loop = Loop2;
         type Loop2 = Loop;
+        type Mode = "fast" | "slow";
+        type ModeAlias = Mode;
+        declare enum Level { Low = 1 }
     "#;
 
     fn holder(arg: TypeRef) -> TypeRef {
@@ -2840,6 +2901,30 @@ mod tests {
                 user_arg(&holder(TypeRef::ident("Id")), ctx, scope),
                 "Holder < String >"
             );
+            // Enums are native leaves too, so they stay named rather than
+            // taking the wrapper of their primitive.
+            assert_eq!(user_arg(&TypeRef::ident("ModeAlias"), ctx, scope), "Mode");
+            assert_eq!(user_arg(&TypeRef::ident("Level"), ctx, scope), "Level");
+            assert_eq!(
+                user_arg(&holder(TypeRef::ident("Mode")), ctx, scope),
+                "Holder < Mode >"
+            );
+            assert_eq!(
+                user_arg(
+                    &TypeRef::Nullable(Box::new(TypeRef::ident("Level"))),
+                    ctx,
+                    scope
+                ),
+                "Option < Level >"
+            );
+            assert_eq!(
+                user_arg(
+                    &TypeRef::generic("Array", vec![TypeRef::ident("Mode")]),
+                    ctx,
+                    scope
+                ),
+                "Array < JsString >"
+            );
         });
     }
 
@@ -2850,6 +2935,8 @@ mod tests {
             assert!(native(&TypeRef::String));
             assert!(native(&TypeRef::ident("MaybeId")));
             assert!(native(&holder(TypeRef::Number)));
+            assert!(native(&TypeRef::ident("ModeAlias")));
+            assert!(native(&TypeRef::ident("Level")));
             assert!(!native(&TypeRef::generic("Array", vec![TypeRef::String])));
             assert!(!native(&TypeRef::ident("Plain")));
             assert!(!native(&TypeRef::ident("Loop")));
@@ -2868,6 +2955,8 @@ mod tests {
                 "Pair",
                 vec![TypeRef::Number, TypeRef::ident("Id")]
             )));
+            assert!(!eligible(&TypeRef::ident("Mode")));
+            assert!(!eligible(&holder(TypeRef::ident("Mode"))));
             // Top-level literal unions become enums, not `String`.
             assert!(!eligible(&lits(&["a", "b"])));
             assert!(!eligible(&TypeRef::Nullable(Box::new(lits(&["a", "b"])))));
@@ -2973,5 +3062,87 @@ mod tests {
             members(&[S("auto".into()), N(0.0), N(1.0)]),
             Some(vec![S("auto".into()), Number])
         );
+    }
+
+    #[test]
+    fn enums_are_named_only_at_the_top_level() {
+        let src = r#"
+            type Mode = "fast" | "slow";
+            type ModeAlias = Mode;
+            declare enum Level { Low = 1 }
+            declare namespace Codes { type Region = "eu" | "us"; }
+        "#;
+        let (module, gctx) = crate::parse_source(src, None).unwrap();
+        let ctx = CodegenContext::from_module_full(&module, &gctx, false, false, HashSet::new());
+        let scope = *module.file_scopes.first().expect("file scope");
+        let lower = |ty: &TypeRef, pos: TypePosition| {
+            to_syn_type(ty, pos, Some(&ctx), scope, &ModuleContext::Global).to_string()
+        };
+        let region = TypeRef::Reference {
+            segments: vec!["Codes".into(), "Region".into()],
+            generic_args: vec![],
+        };
+        let arg = TypePosition::ARGUMENT;
+        let ret = TypePosition::RETURN;
+
+        assert_eq!(lower(&TypeRef::ident("Mode"), arg), "Mode");
+        assert_eq!(lower(&TypeRef::ident("ModeAlias"), arg), "Mode");
+        assert_eq!(lower(&TypeRef::ident("Level"), arg), "Level");
+        assert_eq!(lower(&region, arg), "Region");
+
+        let modes = TypeRef::Array(Box::new(TypeRef::ident("ModeAlias")));
+        let levels = TypeRef::Array(Box::new(TypeRef::ident("Level")));
+        assert_eq!(lower(&modes, arg), "& [String]");
+        assert_eq!(lower(&levels, ret), "Vec < f64 >");
+        assert_eq!(
+            lower(&TypeRef::generic("Promise", vec![region]), ret),
+            "Promise < JsString >"
+        );
+        assert_eq!(
+            lower(
+                &TypeRef::generic("Array", vec![TypeRef::ident("Level")]),
+                arg
+            ),
+            "& Array < Number >"
+        );
+
+        assert_eq!(
+            ctx.enum_repr(&TypeRef::ident("ModeAlias"), scope),
+            Some(TypeRef::String)
+        );
+        assert_eq!(ctx.enum_repr(&TypeRef::ident("Codes"), scope), None);
+    }
+
+    #[test]
+    fn qualified_names_resolve_through_module_namespaces() {
+        let src = r#"
+            export type Kind = "text" | "bytes";
+            export declare namespace Outer {
+                namespace Inner { type Deep = "a" | "b"; }
+            }
+        "#;
+        let (module, gctx) = crate::parse_source(src, Some("m")).unwrap();
+        let ctx = CodegenContext::from_module_full(&module, &gctx, false, false, HashSet::new());
+        let scope = *module.file_scopes.first().expect("file scope");
+        let outer = match &gctx
+            .get_type(gctx.resolve_path(scope, "Outer").unwrap())
+            .kind
+        {
+            TypeKind::Namespace(ns) => ns.child_scope,
+            _ => unreachable!(),
+        };
+        let path = |p: &str| TypeRef::Reference {
+            segments: p.split('.').map(String::from).collect(),
+            generic_args: vec![],
+        };
+        let lower = |ty: &TypeRef, scope: ScopeId| {
+            let from = ModuleContext::Module("m".into());
+            to_syn_type(ty, TypePosition::ARGUMENT, Some(&ctx), scope, &from).to_string()
+        };
+
+        assert_eq!(lower(&path("Outer.Inner.Deep"), scope), "Deep");
+        assert_eq!(lower(&path("Inner.Deep"), outer), "Deep");
+        // Only the last segment matches the local `Kind`.
+        assert_eq!(lower(&path("Other.Kind"), scope), "& JsValue");
     }
 }

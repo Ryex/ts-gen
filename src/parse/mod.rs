@@ -235,10 +235,38 @@ fn parse_single_file(
             }
             let name = declaration_name(&decl.kind);
             let decl_scope = decl.scope_id;
+            let flat_scope = match &decl.module_context {
+                crate::ir::ModuleContext::Module(m) => Some(
+                    registry
+                        .module_scopes
+                        .get(m.as_ref())
+                        .copied()
+                        .unwrap_or(file_scope),
+                ),
+                crate::ir::ModuleContext::Global => None,
+            };
+            let members = match &decl.kind {
+                crate::ir::TypeKind::Namespace(ns) => Some(ns.child_scope),
+                _ => None,
+            };
             let type_id = gctx.insert_type(decl);
+            // A namespace merged with a same-named class, function or
+            // interface leaves that declaration as the name's type.
+            let merged = members.is_some()
+                && name.as_ref().is_some_and(|name| {
+                    gctx.scopes.get(decl_scope).get(name).is_some_and(|id| {
+                        !matches!(gctx.get_type(id).kind, crate::ir::TypeKind::Namespace(_))
+                    })
+                });
             // Insert/upgrade the type in the scope so codegen can resolve it.
-            if let Some(ref name) = name {
+            // Members of a namespace inside a module are flattened into the
+            // module but declared in the namespace scope, which also needs the
+            // upgrade for `NS.Member` to reach the populated declaration.
+            if let Some(name) = name.as_ref().filter(|_| !merged) {
                 gctx.scopes.insert(decl_scope, name.clone(), type_id);
+                if let Some(flat_scope) = flat_scope.filter(|&s| s != decl_scope) {
+                    gctx.scopes.insert(flat_scope, name.clone(), type_id);
+                }
             }
             // Script files: hoist global declarations to the builtin scope
             // so they're visible across all files (TypeScript "script" semantics).
@@ -246,7 +274,12 @@ fn parse_single_file(
             if is_script && decl_scope == file_scope {
                 if let Some(parent) = gctx.scopes.get(file_scope).parent {
                     if let Some(name) = name {
-                        gctx.scopes.insert(parent, name, type_id);
+                        if let Some(members) = members {
+                            gctx.scopes.insert_namespace(parent, name.clone(), members);
+                        }
+                        if !merged {
+                            gctx.scopes.insert(parent, name, type_id);
+                        }
                     }
                 }
             }
@@ -255,6 +288,48 @@ fn parse_single_file(
         .collect();
 
     Ok(type_ids)
+}
+
+/// Bind an import to what its name means in the exporting scope: a type, a
+/// namespace, or both when they merge. Returns whether either was found.
+///
+/// `own_only` restricts the lookup to names `target` declares itself, for a
+/// `declare module` block whose parent scope is the enclosing file's.
+fn bind_import(
+    gctx: &mut crate::context::GlobalContext,
+    import: &scope::PendingImport,
+    target: ScopeId,
+    own_only: bool,
+) -> bool {
+    // `import * as A` makes `A` a namespace whose members are the module's
+    // own scope. `export *` also registers as `*` but binds no local name.
+    if import.original_name == "*" {
+        if import.local_name == "*" {
+            return false;
+        }
+        gctx.scopes
+            .insert_namespace(import.scope, import.local_name.clone(), target);
+        return true;
+    }
+    let name = &import.original_name;
+    let (type_id, members) = if own_only {
+        let scope = gctx.scopes.get(target);
+        (scope.get(name), scope.namespace(name))
+    } else {
+        (
+            gctx.scopes.resolve(target, name),
+            gctx.scopes.resolve_namespace(target, name),
+        )
+    };
+    if let Some(type_id) = type_id {
+        gctx.scopes
+            .insert(import.scope, import.local_name.clone(), type_id);
+    }
+    if let Some(members) = members {
+        gctx.scopes
+            .insert_namespace(import.scope, import.local_name.clone(), members);
+    }
+    type_id.is_some() || members.is_some()
 }
 
 /// Deduplicate function overloads: when multiple `FunctionDecl` share the same
@@ -339,12 +414,12 @@ fn resolve_imports(
             let ambient = gctx
                 .ambient_module_scopes
                 .get(&import.from_module)
+                .cloned()
+                .unwrap_or_default();
+            if ambient
                 .into_iter()
-                .flatten()
-                .find_map(|&scope| gctx.scopes.get(scope).get(&import.original_name));
-            if let Some(type_id) = ambient {
-                gctx.scopes
-                    .insert(import.scope, import.local_name.clone(), type_id);
+                .any(|scope| bind_import(gctx, &import, scope, true))
+            {
                 continue;
             }
 
@@ -352,10 +427,7 @@ fn resolve_imports(
             if let Some(module_id) = gctx.find_module(&import.from_module) {
                 // Look up the name in the target module's scope
                 let target_scope = gctx.get_module(module_id).scope;
-                if let Some(type_id) = gctx.scopes.resolve(target_scope, &import.original_name) {
-                    gctx.scopes
-                        .insert(import.scope, import.local_name.clone(), type_id);
-                } else {
+                if !bind_import(gctx, &import, target_scope, false) {
                     gctx.warn(format!(
                         "Import `{}` not found in module \"{}\"",
                         import.original_name, import.from_module
@@ -399,15 +471,7 @@ fn resolve_imports(
                                     new_files_parsed = true;
 
                                     // Now resolve the imported name from the dep's scope
-                                    if let Some(type_id) =
-                                        gctx.scopes.resolve(dep_scope, &import.original_name)
-                                    {
-                                        gctx.scopes.insert(
-                                            import.scope,
-                                            import.local_name.clone(),
-                                            type_id,
-                                        );
-                                    } else {
+                                    if !bind_import(gctx, &import, dep_scope, false) {
                                         gctx.warn(format!(
                                             "Import `{}` not found in \"{}\"",
                                             import.original_name, import.from_module
@@ -1010,6 +1074,42 @@ mod tests {
     }
 
     #[test]
+    fn test_import_namespaces_between_ambient_modules() {
+        let dir = std::env::temp_dir().join(format!("ts-gen-ambient-ns-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let decls = dir.join("decls.d.ts");
+        std::fs::write(
+            &decls,
+            r#"
+                declare module "a" {
+                    export interface Opts {}
+                    export namespace inner { type Deep = "p" | "q"; }
+                }
+                declare module "b" {
+                    import { inner } from "a";
+                    import * as A from "a";
+                }
+            "#,
+        )
+        .unwrap();
+        let result = parse_dts_files(&[&decls], None);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let (_, gctx) = result.unwrap();
+
+        let b_scope = gctx.ambient_module_scopes["b"][0];
+        let kind = |path: &str| {
+            gctx.resolve_path(b_scope, path)
+                .map(|id| &gctx.get_type(id).kind)
+        };
+        assert!(matches!(kind("inner.Deep"), Some(TypeKind::StringEnum(_))));
+        assert!(matches!(kind("A.Opts"), Some(TypeKind::Interface(_))));
+        assert!(matches!(
+            kind("A.inner.Deep"),
+            Some(TypeKind::StringEnum(_))
+        ));
+    }
+
+    #[test]
     fn test_merge_class_pairs_two_modules_with_same_name() {
         // Same name, two distinct modules — should remain separate even
         // though both are non-global.
@@ -1079,5 +1179,103 @@ mod tests {
                 TypeRef::BigInt
             ]
         );
+    }
+
+    #[test]
+    fn module_namespace_members_resolve_by_qualified_path() {
+        let src = r#"
+            export declare namespace Codes {
+                type Region = "eu" | "us";
+            }
+        "#;
+        let (module, gctx) = crate::parse_source(src, Some("m")).unwrap();
+        let scope = module.file_scopes[0];
+        let id = gctx
+            .resolve_path(scope, "Codes.Region")
+            .expect("Codes.Region resolves");
+        assert!(module.types.contains(&id), "resolves to the populated decl");
+        match &gctx.get_type(id).kind {
+            TypeKind::StringEnum(e) => assert_eq!(e.variants.len(), 2),
+            other => panic!("expected a string enum, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn merged_namespaces_resolve_alongside_their_type() {
+        for lib in [None, Some("m")] {
+            let src = r#"
+                export declare class Foo {}
+                export declare namespace Foo { interface Options {} }
+                export declare namespace Bar { type Mode = "on" | "off"; }
+                export declare function Bar(): void;
+                export type Local = "l";
+            "#;
+            let src = if lib.is_some() {
+                src.to_string()
+            } else {
+                src.replace("export ", "")
+            };
+            let (module, gctx) = crate::parse_source(&src, lib).unwrap();
+            let scope = module.file_scopes[0];
+            let kind = |path: &str| {
+                gctx.resolve_path(scope, path)
+                    .map(|id| &gctx.get_type(id).kind)
+            };
+
+            assert!(matches!(kind("Foo"), Some(TypeKind::Class(_))), "{lib:?}");
+            assert!(
+                matches!(kind("Foo.Options"), Some(TypeKind::Interface(_))),
+                "{lib:?}"
+            );
+            assert!(
+                matches!(kind("Bar"), Some(TypeKind::Function(_))),
+                "{lib:?}"
+            );
+            assert!(
+                matches!(kind("Bar.Mode"), Some(TypeKind::StringEnum(_))),
+                "{lib:?}"
+            );
+            // A member lookup does not fall back to the enclosing scope.
+            assert!(kind("Foo.Local").is_none(), "{lib:?}");
+        }
+    }
+
+    #[test]
+    fn imported_namespaces_resolve_qualified_members() {
+        let dir = std::env::temp_dir().join(format!("ts-gen-import-ns-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("dep.d.ts"),
+            r#"
+                export declare namespace NS { type K = "a" | "b"; }
+                export declare class Foo {}
+                export declare namespace Foo { interface Options {} }
+            "#,
+        )
+        .unwrap();
+        let main = dir.join("main.d.ts");
+        std::fs::write(
+            &main,
+            r#"import { NS, Foo as Bar } from "./dep"; import * as D from "./dep";"#,
+        )
+        .unwrap();
+        let result = parse_dts_files(&[&main], Some("main"));
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        let (module, gctx) = result.unwrap();
+        let scope = module.file_scopes[0];
+        let kind = |path: &str| {
+            gctx.resolve_path(scope, path)
+                .map(|id| &gctx.get_type(id).kind)
+        };
+        assert!(matches!(kind("NS.K"), Some(TypeKind::StringEnum(_))));
+        assert!(matches!(kind("Bar"), Some(TypeKind::Class(_))));
+        assert!(matches!(kind("Bar.Options"), Some(TypeKind::Interface(_))));
+        assert!(matches!(kind("D.Foo"), Some(TypeKind::Class(_))));
+        assert!(matches!(kind("D.NS.K"), Some(TypeKind::StringEnum(_))));
+        assert!(matches!(
+            kind("D.Foo.Options"),
+            Some(TypeKind::Interface(_))
+        ));
     }
 }
