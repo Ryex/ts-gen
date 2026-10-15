@@ -1241,9 +1241,9 @@ fn compute_trim(signatures: &[Vec<ConcreteParam>]) -> (usize, usize) {
 ///
 /// | TypeScript      | Rust (arg)      | Suffix          |
 /// | --------------- | --------------- | --------------- |
-/// | `string`        | `&str`          | `str`           |
-/// | `number`        | `f64`           | `f64`           |
-/// | `boolean`       | `bool`          | `bool`          |
+/// | `string`, `"x"` | `&str`          | `str`           |
+/// | `number`, `1`   | `f64`           | `f64`           |
+/// | `boolean`, `true` | `bool`        | `bool`          |
 /// | `Array<T>`      | `&[T]`          | `slice`         |
 /// | `T[]`           | `&[T]`          | `slice`         |
 /// | `Uint8Array`    | `&Uint8Array`   | `uint8_array`   |
@@ -1260,9 +1260,9 @@ fn compute_trim(signatures: &[Vec<ConcreteParam>]) -> (usize, usize) {
 /// "any concrete typed-array" which captures both arms.
 fn type_snake_name(ty: &TypeRef) -> String {
     match ty {
-        TypeRef::String => "str".to_string(),
-        TypeRef::Number => "f64".to_string(),
-        TypeRef::Boolean => "bool".to_string(),
+        TypeRef::String | TypeRef::StringLiteral(_) => "str".to_string(),
+        TypeRef::Number | TypeRef::NumberLiteral(_) => "f64".to_string(),
+        TypeRef::Boolean | TypeRef::BooleanLiteral(_) => "bool".to_string(),
         TypeRef::BigInt => "big_int".to_string(),
         TypeRef::Symbol => "symbol".to_string(),
         TypeRef::Void | TypeRef::Undefined => "undefined".to_string(),
@@ -1358,7 +1358,7 @@ pub(crate) fn generate_concrete_params_with_mono_bounds(
 /// The Rust type of one concrete parameter, exactly as the emitters render
 /// it. Cross-overload dedup compares these so two expansions collapse only
 /// when their rendered signatures coincide.
-fn render_param_type(
+pub(crate) fn render_param_type(
     param: &ConcreteParam,
     cgctx: Option<&CodegenContext<'_>>,
     scope: ScopeId,
