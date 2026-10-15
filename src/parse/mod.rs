@@ -127,10 +127,26 @@ fn parse_single_file(
 
     let parser_return = Parser::new(&allocator, source, source_type).parse();
 
-    if !parser_return.diagnostics.is_empty() {
-        for error in parser_return.diagnostics.iter() {
-            gctx.warn(format!("Parse error in {}: {}", path.display(), error));
+    for error in parser_return.diagnostics.iter() {
+        let mut message = format!("Parse error: {}", error.message);
+        if let Some(help) = &error.help {
+            message.push_str(&format!("\n  help: {help}"));
         }
+        let label = error
+            .labels
+            .iter()
+            .find(|l| l.primary())
+            .or_else(|| error.labels.first());
+        match label {
+            Some(label) => gctx.diagnostics.warn_at(message, label.offset()),
+            None => gctx.warn(format!("{}: {message}", path.display())),
+        }
+    }
+    if parser_return.fatal_error {
+        gctx.diagnostics.error(format!(
+            "Internal OXC parse error: {} could not be parsed, no bindings were generated for it",
+            path.display()
+        ));
     }
 
     let program = &parser_return.program;
@@ -1000,5 +1016,32 @@ mod tests {
         );
         let merged = merge_class_pairs(vec![a, b]);
         assert_eq!(merged.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_errors_carry_source_location() {
+        let source = "export interface A {\n  x: string;\n}\nexport declare function f(a: string: number): void;\n";
+        let (_, gctx) = parse_single_source(source, Some("m")).unwrap();
+        let diag = gctx
+            .diagnostics
+            .diagnostics
+            .iter()
+            .find(|d| d.message.starts_with("Parse error"))
+            .expect("parse error diagnostic");
+        assert_eq!(
+            diag.message,
+            "Parse error: Expected `,` or `)` but found `:`"
+        );
+        let loc = diag.location.as_ref().expect("parse error location");
+        assert_eq!(loc.to_string(), "<input>:4:36");
+        assert!(gctx.diagnostics.has_errors());
+    }
+
+    #[test]
+    fn test_recoverable_parse_error_is_not_fatal() {
+        let source = "export interface A { public x: string }\n";
+        let (_, gctx) = parse_single_source(source, Some("m")).unwrap();
+        assert!(gctx.diagnostics.has_warnings());
+        assert!(!gctx.diagnostics.has_errors());
     }
 }
