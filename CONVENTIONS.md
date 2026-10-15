@@ -207,7 +207,7 @@ pub fn bar(this: &Foo) -> String;
 
 #[wasm_bindgen(method, getter)]
 pub fn baz(this: &Foo) -> f64;
-#[wasm_bindgen(method, setter, js_name = "baz")]
+#[wasm_bindgen(method, setter)]
 pub fn set_baz(this: &Foo, val: f64);
 ```
 
@@ -218,10 +218,24 @@ the setter is named `set_<snake_case>`.
 
 * JS `camelCase` / `PascalCase` identifiers → Rust `snake_case` for fns,
   `PascalCase` for types.
-* `js_name = "..."` is emitted whenever the Rust ident differs from the JS
-  ident, so `wasm-bindgen` binds to the correct runtime name.
-* Reserved Rust keywords (e.g. `type`, `match`, `move`) are emitted as raw
-  identifiers (`r#type`).
+* Reserved Rust keywords in fn, method, and accessor names get a trailing
+  underscore (`type()` → `type_`). Elsewhere (parameters, variables) they
+  are emitted as raw identifiers (`r#type`, `r#loop`), except `self`,
+  `Self`, `super`, and `crate`, which cannot be raw and become `self_` etc.
+* Names that are not valid Rust identifiers are sanitised (`0` → `_0`,
+  `$public` → `public`, `@cf/openai/whisper` → `cfopenaiwhisper`).
+* `js_name = "..."` is emitted whenever the final Rust ident (after all of
+  the above) no longer spells the JS name, so `wasm-bindgen` binds to the
+  correct runtime name. This applies to types, methods, free functions,
+  variables, getters, and setters (whose JS name `wasm-bindgen` infers by
+  stripping `set_`, so `set_0` needs no `js_name` but `set_public` for
+  `$public` does). Raw identifiers already bind to their unraw name.
+* `wasm-bindgen` resolves the JS class of constructors and static members
+  from the return type / `static_method_of` ident and the item's own
+  `js_namespace`, ignoring the type's attributes. So when a type's Rust
+  ident differs from its JS name (`$Store` → `Store`, or a collision rename
+  like `Global_`) they carry `js_class = "<js name>"`, and inside a
+  namespace they repeat `js_namespace`.
 
 ## JS-name collisions with `js_sys` glob imports
 
@@ -232,8 +246,9 @@ reference. We resolve this by:
 
 1. Picking a suffixed Rust ident (`Global` → `Global_`) for the
    internal declaration.
-2. Keeping `js_name = "Global"` on the wasm-bindgen attr so the JS-side
-   binding is unaffected.
+2. Keeping `js_name = "Global"` on the type, and `js_class = "Global"` on
+   its constructors and static members, so the JS-side binding is
+   unaffected (see [Naming conversion](#naming-conversion)).
 3. Re-exporting under the original name so the public Rust path is
    unchanged: `pub use Global_ as Global;`
 
@@ -244,7 +259,7 @@ pub mod web_assembly {
     extern "C" {
         #[wasm_bindgen(extends = Object, js_name = "Global", js_namespace = "WebAssembly")]
         pub type Global_;
-        #[wasm_bindgen(constructor, catch, js_name = "Global")]
+        #[wasm_bindgen(constructor, js_class = "Global", js_namespace = "WebAssembly", catch)]
         pub fn new(...) -> Result<Global_, JsValue>;
     }
     pub use Global_ as Global;   // public face
