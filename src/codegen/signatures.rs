@@ -354,8 +354,13 @@ pub fn expand_signatures(
 ) -> Vec<ExpandedSignature> {
     // Phase 1: Per-overload expansion — optional truncation + union cartesian product.
     let mut all_sigs: Vec<Vec<ConcreteParam>> = Vec::new();
-    for params in overloads {
-        all_sigs.extend(expand_single_overload(params, cgctx, scope));
+    let mut first_overload_sigs = 0;
+    for (index, params) in overloads.iter().enumerate() {
+        let sigs = expand_single_overload(params, cgctx, scope);
+        if index == 0 {
+            first_overload_sigs = sigs.len();
+        }
+        all_sigs.extend(sigs);
     }
 
     // Phase 2: Cross-overload dedup — remove signatures that are identical
@@ -374,7 +379,10 @@ pub fn expand_signatures(
     let mut seen_concrete: Vec<&Vec<ConcreteParam>> = Vec::new();
     let mut seen_rendered: Vec<Vec<String>> = Vec::new();
     let mut deduped: Vec<Vec<ConcreteParam>> = Vec::new();
-    for sig in &all_sigs {
+    // The first overload's expansions are never dropped as duplicates of a
+    // later overload's, so its survivors are a contiguous prefix of `deduped`.
+    let mut first_overload_len = 0;
+    for (i, sig) in all_sigs.iter().enumerate() {
         if seen_concrete.iter().any(|s| concrete_params_eq(s, sig)) {
             continue;
         }
@@ -385,9 +393,21 @@ pub fn expand_signatures(
         seen_concrete.push(sig);
         seen_rendered.push(rendered);
         deduped.push(sig.clone());
+        if i < first_overload_sigs {
+            first_overload_len += 1;
+        }
     }
 
     // Phase 3: Suffix — compute `_with_X` disambiguators across the cohort.
+    // The base name goes to the first overload's shortest expansion, or to
+    // a shorter expansion that is a prefix of it: with
+    // `get(key, options: Required)` declared before `get(key, options?)`,
+    // `(key)` owns `get` rather than the two-arg form. A shorter expansion
+    // with different leading params (`put(entries)` next to
+    // `put(key, value)`) does not displace the first overload.
+    if let Some(primary) = primary_expansion(&deduped, first_overload_len) {
+        deduped[..=primary].rotate_right(1);
+    }
     compute_suffixes(&deduped)
         .into_iter()
         .zip(deduped)
@@ -396,6 +416,22 @@ pub fn expand_signatures(
             params,
         })
         .collect()
+}
+
+/// Index of the expansion that owns the unsuffixed name; see the Phase 3
+/// comment in [`expand_signatures`]. The first `first_overload_len` entries
+/// of `sigs` are the first overload's expansions. `None` when there is
+/// nothing to move.
+fn primary_expansion(sigs: &[Vec<ConcreteParam>], first_overload_len: usize) -> Option<usize> {
+    let anchor = (0..first_overload_len).min_by_key(|&i| sigs[i].len())?;
+    let is_prefix_of_anchor = |sig: &[ConcreteParam]| {
+        sig.len() < sigs[anchor].len() && concrete_params_eq(sig, &sigs[anchor][..sig.len()])
+    };
+    let primary = (0..sigs.len())
+        .filter(|&i| is_prefix_of_anchor(&sigs[i]))
+        .min_by_key(|&i| sigs[i].len())
+        .unwrap_or(anchor);
+    (primary != 0).then_some(primary)
 }
 
 /// Per-callable input describing a JS callable that needs to be emitted as
@@ -557,8 +593,8 @@ fn push_with_js_string_return(
 }
 
 /// Compute `_with_X` / `_with_X_and_Y` suffixes across a cohort of expanded
-/// signatures. Returns one suffix string per input. The shortest-arity
-/// variant (or the only one if there's a single signature) gets `""`.
+/// signatures. Returns one suffix string per input. The first variant
+/// (or the only one if there's a single signature) gets `""`.
 ///
 /// Wraps the existing [`compute_rust_names`] helper, then extracts the
 /// suffixes by stripping a shared base prefix. We compute against a
@@ -976,9 +1012,8 @@ fn compute_rust_names(base_name: &str, signatures: &[Vec<ConcreteParam>]) -> Vec
     let mut used: std::collections::HashSet<String> = std::collections::HashSet::new();
 
     for (sig_idx, sig) in signatures.iter().enumerate() {
-        // The first signature (shortest / most basic) gets the base name
-        // without any suffix. This matches the convention that the most
-        // common calling pattern uses the simplest name.
+        // The first signature gets the base name without any suffix;
+        // `expand_signatures` has already moved the primary to the front.
         if sig_idx == 0 {
             names.push(base_name.to_string());
             used.insert(base_name.to_string());
@@ -2000,6 +2035,88 @@ mod tests {
         assert_eq!(sigs[1].params.len(), 2);
         assert_eq!(sigs[2].rust_name, "new_with_stderr_and_ignore_errors");
         assert_eq!(sigs[2].params.len(), 3);
+    }
+
+    /// `(name, type)` of each param of the signature owning the bare `js`
+    /// name, across `overloads` of one method.
+    fn primary_params(js: &str, overloads: &[&[Param]]) -> Vec<(String, TypeRef)> {
+        let sigs = expand_overloads(
+            js,
+            overloads,
+            &TypeRef::Void,
+            SignatureKind::Method,
+            &None,
+            &mut no_used(),
+        );
+        let primary = sigs.iter().find(|s| s.rust_name == js).unwrap();
+        primary
+            .params
+            .iter()
+            .map(|p| (p.name.clone(), p.type_ref.clone()))
+            .collect()
+    }
+
+    fn named(params: &[(&str, TypeRef)]) -> Vec<(String, TypeRef)> {
+        params
+            .iter()
+            .map(|(name, ty)| (name.to_string(), ty.clone()))
+            .collect()
+    }
+
+    #[test]
+    fn primary_is_shorter_prefix_of_required_options_overload() {
+        let primary = primary_params(
+            "get",
+            &[
+                &[
+                    string_param("key"),
+                    typed_param("options", TypeRef::ident("Conditional")),
+                ],
+                &[
+                    string_param("key"),
+                    opt_typed_param("options", TypeRef::ident("GetOptions")),
+                ],
+            ],
+        );
+        assert_eq!(primary, named(&[("key", TypeRef::String)]));
+    }
+
+    #[test]
+    fn primary_is_later_zero_argument_overload() {
+        let primary = primary_params("first", &[&[string_param("column")], &[]]);
+        assert_eq!(primary, named(&[]));
+    }
+
+    #[test]
+    fn primary_stays_with_first_overload_on_different_leading_names() {
+        let primary = primary_params(
+            "put",
+            &[
+                &[
+                    string_param("key"),
+                    string_param("value"),
+                    opt_param("options"),
+                ],
+                &[param("entries"), opt_param("options")],
+            ],
+        );
+        assert_eq!(
+            primary,
+            named(&[("key", TypeRef::String), ("value", TypeRef::String)])
+        );
+    }
+
+    #[test]
+    fn primary_stays_with_first_overload_on_different_leading_types() {
+        let opts = TypeRef::ident("Options");
+        let primary = primary_params(
+            "find",
+            &[
+                &[string_param("key"), typed_param("opts", opts.clone())],
+                &[typed_param("key", TypeRef::Number)],
+            ],
+        );
+        assert_eq!(primary, named(&[("key", TypeRef::String), ("opts", opts)]));
     }
 
     #[test]
