@@ -1,6 +1,7 @@
 //! Subtyping lattice — walk parent chains for built-in JS/TS types and
 //! user-declared `class`/`interface` types, and compute the most-specific
-//! common ancestor (LUB) of a set of types.
+//! common ancestor (LUB) of a set of types, or the most-specific member
+//! of an intersection.
 //!
 //! This is what powers union simplification (`T1 | T2 | …` → common
 //! ancestor) including the special case of `@throws {T1 | T2 | …}` whose
@@ -208,6 +209,7 @@ pub fn lub_union(
     if members.is_empty() {
         return None;
     }
+    let members = &collapse_intersections(members, ctx, scope);
     if let Some(widened) = widen_literal_family(members) {
         return Some(widened);
     }
@@ -225,6 +227,55 @@ pub fn lub_union(
         return None;
     }
     Some(TypeRef::ident(lub))
+}
+
+/// Bound for an intersection that was not hoisted to an interface — the
+/// dual of [`lub_union`]. Parsing has already dropped top types and
+/// unwrapped single survivors (`simplify_intersection`), so what reaches
+/// here has two or more real members. `A & B` is a subtype of each, so
+/// any member is a sound bound; the most specific is a named member whose
+/// ancestor chain contains all the others. `None` when the members are
+/// unrelated or not all named; the caller substitutes `JsValue`.
+pub fn glb_intersection(
+    members: &[TypeRef],
+    ctx: Option<&CodegenContext<'_>>,
+    scope: ScopeId,
+) -> Option<TypeRef> {
+    let cgctx = ctx?;
+    let names: Vec<&str> = members
+        .iter()
+        .map(|m| m.as_ident())
+        .collect::<Option<_>>()?;
+    let chains: Vec<Vec<String>> = names
+        .iter()
+        .map(|n| ancestor_chain(n, cgctx, scope))
+        .collect();
+    let glb = (0..names.len()).find(|&i| {
+        names
+            .iter()
+            .enumerate()
+            .all(|(j, n)| j == i || chains[i].iter().any(|a| a == n))
+    })?;
+    Some(TypeRef::ident(names[glb]))
+}
+
+/// Replace each intersection member of a union with its bound so the LUB
+/// sees the member it actually lowers to. Members with no bound are left
+/// for the caller's `JsValue` fallback.
+fn collapse_intersections(
+    members: &[TypeRef],
+    ctx: Option<&CodegenContext<'_>>,
+    scope: ScopeId,
+) -> Vec<TypeRef> {
+    members
+        .iter()
+        .map(|m| match m {
+            TypeRef::Intersection(parts) => {
+                glb_intersection(parts, ctx, scope).unwrap_or_else(|| m.clone())
+            }
+            _ => m.clone(),
+        })
+        .collect()
 }
 
 /// If every member of `types` belongs to the same primitive family —
@@ -476,5 +527,52 @@ mod tests {
         let cgctx = CodegenContext::empty(&gctx, scope);
         let lub = lub_union(&[], Some(&cgctx), scope);
         assert_eq!(lub, None);
+    }
+
+    fn glb(members: &[TypeRef]) -> Option<TypeRef> {
+        let (gctx, scope) = ctx();
+        let cgctx = CodegenContext::empty(&gctx, scope);
+        glb_intersection(members, Some(&cgctx), scope)
+    }
+
+    #[test]
+    fn glb_picks_the_subtype_in_either_order() {
+        let expected = Some(TypeRef::ident("TypeError"));
+        assert_eq!(
+            glb(&[TypeRef::ident("Error"), TypeRef::ident("TypeError")]),
+            expected
+        );
+        assert_eq!(
+            glb(&[TypeRef::ident("TypeError"), TypeRef::ident("Error")]),
+            expected
+        );
+    }
+
+    #[test]
+    fn glb_unrelated_named_members_is_none() {
+        assert_eq!(
+            glb(&[TypeRef::ident("TypeError"), TypeRef::ident("RangeError")]),
+            None
+        );
+    }
+
+    #[test]
+    fn glb_non_ident_members_is_none() {
+        assert_eq!(glb(&[TypeRef::ident("Foo"), TypeRef::String]), None);
+    }
+
+    #[test]
+    fn lub_union_bounds_intersection_members_first() {
+        let (gctx, scope) = ctx();
+        let cgctx = CodegenContext::empty(&gctx, scope);
+        let lub = lub_union(
+            &[
+                TypeRef::ident("RangeError"),
+                TypeRef::Intersection(vec![TypeRef::ident("Error"), TypeRef::ident("TypeError")]),
+            ],
+            Some(&cgctx),
+            scope,
+        );
+        assert_eq!(lub, Some(TypeRef::ident("Error")));
     }
 }

@@ -597,10 +597,11 @@ pub fn set_level(this: &Options, val: LevelKind);
 
 ## Anonymous interface synthesis
 
-An inline `{ … }` type — or a union of `{ … }` types — that appears
-in a position where a named interface would do is promoted to a real
-`InterfaceDecl` so consumers get a typed builder rather than an opaque
-`Object`. Two positions trigger synthesis:
+An inline `{ … }` type — or a union or intersection built from `{ … }`
+types and named references — that appears in a position where a named
+interface would do is promoted to a real `InterfaceDecl` so consumers
+get a typed builder rather than an opaque `Object`. Two positions
+trigger synthesis:
 
 ### Parameter position
 
@@ -641,10 +642,11 @@ type R2Range = {
 };
 ```
 
-is treated as if the user had written `interface R2Range { … }`.
-Type aliases whose target is a single inline literal — or a union of
-inline literals (see below) — promote directly to interfaces; aliases
-to anything else (named types, primitives, function types, generics,
+is treated as if the user had written `interface R2Range { … }`, and
+the alias's type parameters become the interface's. Type aliases whose
+target is a single inline literal, a union of inline literals, or an
+intersection (see below) promote directly to interfaces; aliases to
+anything else (named types, primitives, function types, generics,
 `Record<…>`, etc.) keep their existing alias semantics.
 
 ### Union of inline literals
@@ -689,6 +691,61 @@ discriminator is detected (see [Discriminated unions](#discriminated-unions)):
 * **`DiscriminatedUnionDecl`** when at least one shared literal-typed
   required field exists — gets the per-branch factory rules described
   in the next section.
+
+### Intersections
+
+`A & B & { … }` is exactly what the user would have written as
+`interface X extends A, B { … }`, so that is what it becomes: every
+named reference in the intersection is an `extends` parent and every
+inline literal contributes own members. The result then flows through
+the regular interface pipeline, including `extends = A, extends = B`
+on the wasm-bindgen side and the dictionary builder for the own
+members. This is what makes the common required-field refinement
+produce a usable type:
+
+```ts
+interface R2Bucket {
+  get(key: string, options: R2GetOptions & { onlyIf: R2Conditional | Headers }): …;
+  get(key: string, options?: R2GetOptions): …;
+}
+type D1Result<T = unknown> = D1Response & { results: T[] };
+```
+
+```rust
+#[wasm_bindgen(extends = R2GetOptions, extends = Object)]
+pub type R2BucketOptions;
+pub fn new(only_if: &R2Conditional) -> R2BucketOptions;
+pub fn new_with_headers(only_if: &Headers) -> R2BucketOptions;
+
+#[wasm_bindgen(extends = D1Response, extends = Object)]
+pub type D1Result<T>;
+pub fn results<T>(this: &D1Result<T>) -> Vec<T>;
+```
+
+Several literals in one intersection are merged with the **meet** of
+the union rules above (a value is every branch at once): a property is
+required if any branch requires it, writable if any branch allows
+writing, and a property typed differently across branches carries the
+intersection of those types, which is bounded at codegen (see
+[Intersections take their most specific member](#intersections-take-their-most-specific-member)).
+
+Every parent must be something an interface could `extends`. A type
+parameter (`T & { id: string }`) or an alias to a non-object type
+(`type Id = string`) leaves the intersection unhoisted, to be bounded
+at codegen. Imported and `--external` names have no local binding and
+are allowed through. A parent that erases at codegen (a conditional
+type, or a name that never resolves and is reported) is dropped from
+`extends` rather than replaced, so the first real parent stays the
+`Deref` target; the literal's own members survive either way. A generic first parent is
+spelled bare in `extends`, which wasm-bindgen reads as
+`Parent<JsValue>`, so such a type derives `PartialEq` without `Eq`.
+
+In parameter position an intersection of named types alone
+(`refine(value: Derived & Base)`) is not hoisted: a fresh subtype would
+force callers to cast a value they already hold, and the bound names
+the member the value is (`&Derived`). An alias supplies a name of its
+own, so `type Person = HasName & HasAge` does hoist, with no own
+members.
 
 ### Naming
 
@@ -1566,6 +1623,38 @@ make generic containers distributive: `Array<TypeError | RangeError>`
 is still a single `Array<Error>` type, and `Record<string, string |
 number | boolean>` lowers as one `Object` binding rather than separate
 record overloads for each value type.
+
+### Intersections take their most specific member
+
+Parsing normalises every intersection: nested `&` is inlined, repeats
+and the identity elements `unknown` and `object` are dropped, since
+`A & object` is `A`, and `any` absorbs the whole intersection as in
+TypeScript. An inline `{ … }` lowers to `object`, so where an
+intersection is not hoisted to an interface (see
+[Intersections](#intersections) under anonymous interface synthesis)
+the common required-field refinement collapses to the named type, and
+`(string & {})` inside a union is the plain `string` arm. A single
+survivor is used bare; none is `Object`.
+
+Two or more surviving members reach codegen as an `Intersection` and
+are lowered to a bound. `A & B` is a subtype of every member, so each
+member is a sound upper bound and the only question is which is most
+specific: a named member whose ancestor chain contains all the others.
+Unrelated or unnamed members erase to `JsValue` with a diagnostic:
+
+```text
+Options & { onlyIf: Conditional }    -> Options     (literal refines Options)
+"a" | "b" | (string & {})            -> "a" | "b" | string
+T & { id: string }                   -> T
+Derived & Base                       -> Derived     (Derived extends Base)
+Derived & any                        -> any
+{ a: string } & { b: number }        -> Object
+Derived & Unrelated                  -> JsValue     (no member subtypes the other)
+```
+
+In argument position the bound accepts slightly more than TypeScript
+does; in return position the literal's extra fields are not reachable.
+Neither is unsound at the ABI.
 
 ### Erased return-position unions become dynamic-union enums
 

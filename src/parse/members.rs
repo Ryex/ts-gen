@@ -11,7 +11,7 @@ use oxc_ast::ast::*;
 use crate::ir::*;
 use crate::parse::ctx::ParseCtx;
 use crate::parse::docs::JsDocInfo;
-use crate::parse::first_pass::converters::interface_from_signatures;
+use crate::parse::literal_union::{merge_member_branches, MergeMode};
 use crate::parse::scope::ScopeId;
 use crate::parse::types::{
     binding_pattern_name, convert_formal_params_scoped, convert_ts_type_scoped, convert_type_params,
@@ -299,18 +299,160 @@ fn unique_type_name(parent: &str, member: &str, used: &mut LocalScope) -> String
     )
 }
 
-/// Try to synthesize an anonymous-interface hoist for a parameter type.
+/// An inline type that promotes to a named declaration. Detected
+/// syntactically by [`inline_shape`]; both the parameter and the
+/// type-alias hoists go through [`synthesize_inline`] with it.
+pub(crate) enum InlineShape<'a, 'b> {
+    /// `{ … }`
+    Literal(&'a TSTypeLiteral<'b>),
+    /// `{ … } | { … }` — branches are joined (see `literal_union`).
+    Union(Vec<&'a TSTypeLiteral<'b>>),
+    /// `A & B & { … }` — references become `extends`, literals are met
+    /// into the own members, so the result is exactly the interface the
+    /// user would have written as `interface X extends A, B { … }`.
+    Intersection {
+        parents: Vec<&'a TSType<'b>>,
+        literals: Vec<&'a TSTypeLiteral<'b>>,
+    },
+}
+
+/// Recognise the shapes that hoist. Anything else returns `None` so the
+/// caller falls back to the regular type-mapping rules (an intersection
+/// with a primitive or function member, for instance, is bounded at
+/// codegen instead).
+pub(crate) fn inline_shape<'a, 'b>(ts_type: &'a TSType<'b>) -> Option<InlineShape<'a, 'b>> {
+    match ts_type {
+        TSType::TSTypeLiteral(literal) => Some(InlineShape::Literal(literal)),
+        TSType::TSUnionType(union) if all_type_literals(&union.types) => Some(InlineShape::Union(
+            union
+                .types
+                .iter()
+                .filter_map(|t| match t {
+                    TSType::TSTypeLiteral(lit) => Some(&**lit),
+                    _ => None,
+                })
+                .collect(),
+        )),
+        TSType::TSIntersectionType(inter) => {
+            let mut parents = Vec::new();
+            let mut literals = Vec::new();
+            for t in &inter.types {
+                match t {
+                    TSType::TSTypeLiteral(lit) => literals.push(&**lit),
+                    TSType::TSTypeReference(_) => parents.push(t),
+                    _ => return None,
+                }
+            }
+            Some(InlineShape::Intersection { parents, literals })
+        }
+        _ => None,
+    }
+}
+
+/// The interface a shape promotes to, plus the per-branch members for a
+/// union so the alias hoist can check for discriminators.
+pub(crate) struct SynthesizedInline {
+    pub iface: InterfaceDecl,
+    pub branches: Vec<Vec<Member>>,
+}
+
+/// Build the interface for `shape` under `name`. `None` when an
+/// intersection parent is not something an interface could `extends`:
+/// a type parameter, a name that does not resolve here, or one that
+/// resolves to anything but a class or interface (an alias to a
+/// primitive, say). Top-type parents (`object`, `unknown`) are dropped
+/// since they add nothing to the shape.
+pub(crate) fn synthesize_inline(
+    shape: &InlineShape<'_, '_>,
+    name: String,
+    type_params: Vec<TypeParam>,
+    parent_scope: ScopeId,
+    ctx: &mut ParseCtx<'_, '_>,
+) -> Option<SynthesizedInline> {
+    let body_scope = create_body_scope(&type_params, parent_scope, ctx);
+    let (literals, mode, extends) = match shape {
+        InlineShape::Literal(lit) => (vec![*lit], MergeMode::Join, Vec::new()),
+        InlineShape::Union(lits) => (lits.clone(), MergeMode::Join, Vec::new()),
+        InlineShape::Intersection { parents, literals } => {
+            let mut extends: Vec<TypeRef> = Vec::new();
+            for parent in parents {
+                let converted = convert_ts_type_scoped(parent, body_scope, ctx);
+                match &converted {
+                    TypeRef::Object | TypeRef::Unknown => {}
+                    TypeRef::Reference { segments, .. } if segments.len() == 1 => {
+                        if !is_extendable(&segments[0], body_scope, ctx) {
+                            return None;
+                        }
+                        if !extends.contains(&converted) {
+                            extends.push(converted);
+                        }
+                    }
+                    // Qualified names are not resolved at parse time; the
+                    // codegen `extends` lowering drops one that erases.
+                    TypeRef::Reference { .. } => {
+                        if !extends.contains(&converted) {
+                            extends.push(converted);
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+            (literals.clone(), MergeMode::Meet, extends)
+        }
+    };
+    let branches: Vec<Vec<Member>> = literals
+        .iter()
+        .map(|lit| {
+            lit.members
+                .iter()
+                .flat_map(|sig| convert_ts_signature(sig, Some(&name), body_scope, ctx))
+                .collect()
+        })
+        .collect();
+    let members = merge_member_branches(&branches, mode);
+    let classification = crate::parse::classify::classify_interface(&members);
+    Some(SynthesizedInline {
+        iface: InterfaceDecl {
+            name: name.clone(),
+            js_name: name,
+            type_params,
+            extends,
+            members,
+            classification,
+            body_scope,
+        },
+        branches,
+    })
+}
+
+/// Whether a single-segment name may appear in an interface's `extends`.
+/// A type parameter cannot; nor can an alias phase 1 already knows is not
+/// an object type. A name with no local binding (an import, an
+/// `--external` mapping, or a typo) is allowed through, as is an alias
+/// whose target is still unknown: codegen resolves them, and drops a
+/// parent that erases, keeping the literal's own members.
+fn is_extendable(name: &str, scope: ScopeId, ctx: &ParseCtx<'_, '_>) -> bool {
+    match ctx.scopes.resolve_binding(scope, name) {
+        Some(crate::parse::scope::Binding::Declared(id)) => {
+            match &ctx.type_arena[id.index()].kind {
+                TypeKind::Class(_) | TypeKind::Interface(_) => true,
+                TypeKind::TypeAlias(a) => matches!(a.target, TypeRef::Any),
+                _ => false,
+            }
+        }
+        Some(crate::parse::scope::Binding::TypeParam) => false,
+        None => true,
+    }
+}
+
+/// Try to synthesize an anonymous-interface hoist for a parameter type
+/// (see [`inline_shape`] for the recognised forms). The hoisted
+/// interface lands in `ctx.synth`; the returned `TypeRef` names it.
 ///
-/// Recognised shapes:
-///
-/// * Bare `{ ... }` — directly hoisted into a single interface whose
-///   members are the literal's members.
-/// * `{ ... } | { ... } | …` where every union branch is itself a
-///   type literal — structurally merged into a single interface (see
-///   [`merge_member_branches`]).
-///
-/// Anything else returns `None` so the caller falls back to the
-/// regular type-mapping rules.
+/// An intersection of named types alone (`Derived & Base`) is not hoisted
+/// here: a parameter typed as a fresh subtype would force callers to cast
+/// a value they already hold, and the codegen bound names the member the
+/// value actually is. An alias supplies a name of its own, so it hoists.
 fn try_synthesize_inline_param(
     ts_type: &TSType<'_>,
     parent_name: &str,
@@ -318,61 +460,19 @@ fn try_synthesize_inline_param(
     scope: ScopeId,
     ctx: &mut ParseCtx<'_, '_>,
 ) -> Option<TypeRef> {
-    match ts_type {
-        TSType::TSTypeLiteral(literal) => {
-            let synth_name = unique_type_name(parent_name, segment, ctx.used_type_names);
-            // Methods inside the hoisted interface may carry their own
-            // anonymous parameter types — recurse and let those land in
-            // `ctx.synth` alongside the parent.
-            let iface = interface_from_signatures(
-                synth_name.clone(),
-                Vec::new(),
-                Vec::new(),
-                &literal.members,
-                scope,
-                ctx,
-            );
-            ctx.synth.push(iface);
-            Some(TypeRef::ident(synth_name))
-        }
-        TSType::TSUnionType(union) if all_type_literals(&union.types) => {
-            let synth_name = unique_type_name(parent_name, segment, ctx.used_type_names);
-            // Convert each branch through the regular signature pipeline
-            // first, then structurally merge at the IR level.
-            let branches: Vec<Vec<Member>> = union
-                .types
-                .iter()
-                .filter_map(|t| match t {
-                    TSType::TSTypeLiteral(lit) => Some(
-                        lit.members
-                            .iter()
-                            .flat_map(|sig| {
-                                convert_ts_signature(sig, Some(&synth_name), scope, ctx)
-                            })
-                            .collect(),
-                    ),
-                    _ => None,
-                })
-                .collect();
-            let merged = crate::parse::literal_union::merge_member_branches(&branches);
-            let classification = crate::parse::classify::classify_interface(&merged);
-            // Hoisted union-merge interfaces have no type parameters of
-            // their own, so the body scope is just the parent scope —
-            // no need to create an extra child.
-            let body_scope = scope;
-            ctx.synth.push(InterfaceDecl {
-                name: synth_name.clone(),
-                js_name: synth_name.clone(),
-                type_params: Vec::new(),
-                extends: Vec::new(),
-                members: merged,
-                classification,
-                body_scope,
-            });
-            Some(TypeRef::ident(synth_name))
-        }
-        _ => None,
+    let shape = inline_shape(ts_type)?;
+    if matches!(&shape, InlineShape::Intersection { literals, .. } if literals.is_empty()) {
+        return None;
     }
+    // Named before the body converts so hoists nested in it dedup against
+    // it; given back if a parent turns out not to be extendable.
+    let synth_name = unique_type_name(parent_name, segment, ctx.used_type_names);
+    let Some(synth) = synthesize_inline(&shape, synth_name.clone(), Vec::new(), scope, ctx) else {
+        ctx.used_type_names.release(&synth_name);
+        return None;
+    };
+    ctx.synth.push(synth.iface);
+    Some(TypeRef::ident(synth_name))
 }
 
 /// Return true when every entry in a union is a type literal — the

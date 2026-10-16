@@ -11,11 +11,7 @@ use JsValue as Cf;
 #[allow(dead_code)]
 use JsValue as CfHostMetadata;
 #[allow(dead_code)]
-use JsValue as D1Result;
-#[allow(dead_code)]
 use JsValue as Data;
-#[allow(dead_code)]
-use JsValue as DurableObjectStub;
 #[allow(dead_code)]
 use JsValue as EmailExportedHandler;
 #[allow(dead_code)]
@@ -37,17 +33,7 @@ use JsValue as ExportedHandlerTraceHandler;
 #[allow(dead_code)]
 use JsValue as Fetcher;
 #[allow(dead_code)]
-use JsValue as IncomingRequestCfProperties;
-#[allow(dead_code)]
-use JsValue as Key;
-#[allow(dead_code)]
-use JsValue as Metadata;
-#[allow(dead_code)]
-use JsValue as P;
-#[allow(dead_code)]
 use JsValue as Params;
-#[allow(dead_code)]
-use JsValue as PluginArgs;
 #[allow(dead_code)]
 use JsValue as R;
 #[allow(dead_code)]
@@ -2267,8 +2253,25 @@ extern "C" {
         error: &JsValue,
     ) -> Result<Option<Promise<Undefined>>, JsValue>;
 }
-#[allow(dead_code)]
-pub type DurableObjectStub<T> = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type DurableObjectStub<T: ::wasm_bindgen::JsGeneric>;
+    #[wasm_bindgen(method, getter)]
+    pub fn id<T: ::wasm_bindgen::JsGeneric>(this: &DurableObjectStub<T>) -> DurableObjectId;
+    #[wasm_bindgen(method, getter)]
+    pub fn name<T: ::wasm_bindgen::JsGeneric>(this: &DurableObjectStub<T>) -> Option<String>;
+}
+impl<T: ::wasm_bindgen::JsGeneric> DurableObjectStub<T> {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> DurableObjectStub<T> {
+        #[allow(unused_unsafe)]
+        unsafe {
+            JsValue::from(js_sys::Object::new()).unchecked_into()
+        }
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -8179,25 +8182,50 @@ impl<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub type KVNamespaceListResult;
+    pub type KVNamespaceListResult<
+        Metadata: ::wasm_bindgen::JsGeneric,
+        Key: ::wasm_bindgen::JsGeneric,
+    >;
     #[wasm_bindgen(method, getter)]
-    pub fn list_complete(this: &KVNamespaceListResult) -> bool;
+    pub fn list_complete<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+    ) -> bool;
     #[wasm_bindgen(method, setter)]
-    pub fn set_list_complete(this: &KVNamespaceListResult, val: bool);
+    pub fn set_list_complete<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+        val: bool,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn keys(this: &KVNamespaceListResult) -> Vec<KVNamespaceListKey<Metadata, Key>>;
+    pub fn keys<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+    ) -> Vec<KVNamespaceListKey<Metadata, Key>>;
     #[wasm_bindgen(method, setter, slice_to_array)]
-    pub fn set_keys(this: &KVNamespaceListResult, val: &[KVNamespaceListKey<Metadata, Key>]);
+    pub fn set_keys<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+        val: &[KVNamespaceListKey<Metadata, Key>],
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn cursor(this: &KVNamespaceListResult) -> Option<String>;
+    pub fn cursor<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+    ) -> Option<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_cursor(this: &KVNamespaceListResult, val: &str);
+    pub fn set_cursor<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+        val: &str,
+    );
     #[wasm_bindgen(method, getter, js_name = "cacheStatus")]
-    pub fn cache_status(this: &KVNamespaceListResult) -> Option<String>;
+    pub fn cache_status<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+    ) -> Option<String>;
     #[wasm_bindgen(method, setter, js_name = "cacheStatus")]
-    pub fn set_cache_status(this: &KVNamespaceListResult, val: &str);
+    pub fn set_cache_status<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>(
+        this: &KVNamespaceListResult<Metadata, Key>,
+        val: &str,
+    );
 }
-impl KVNamespaceListResult {
+impl<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>
+    KVNamespaceListResult<Metadata, Key>
+{
     #[doc = " ## Inlined fields"]
     #[doc = ""]
     #[doc = " * `list_complete: false`"]
@@ -8205,8 +8233,9 @@ impl KVNamespaceListResult {
         keys: &[KVNamespaceListKey<Metadata, Key>],
         cursor: &str,
         cache_status: &str,
-    ) -> KVNamespaceListResult {
-        let inner: KVNamespaceListResult = JsCast::unchecked_into(js_sys::Object::new());
+    ) -> KVNamespaceListResult<Metadata, Key> {
+        let inner: KVNamespaceListResult<Metadata, Key> =
+            JsCast::unchecked_into(js_sys::Object::new());
         inner.set_list_complete(false);
         inner.set_keys(keys);
         inner.set_cursor(cursor);
@@ -8219,7 +8248,7 @@ impl KVNamespaceListResult {
     pub fn new_true(
         keys: &[KVNamespaceListKey<Metadata, Key>],
         cache_status: &str,
-    ) -> KVNamespaceListResult {
+    ) -> KVNamespaceListResult<Metadata, Key> {
         Self::builder_true(keys, cache_status).build()
     }
     #[doc = " ## Inlined fields"]
@@ -8228,23 +8257,29 @@ impl KVNamespaceListResult {
     pub fn builder_true(
         keys: &[KVNamespaceListKey<Metadata, Key>],
         cache_status: &str,
-    ) -> KVNamespaceListResultBuilder {
-        let inner: KVNamespaceListResult = JsCast::unchecked_into(js_sys::Object::new());
+    ) -> KVNamespaceListResultBuilder<Metadata, Key> {
+        let inner: KVNamespaceListResult<Metadata, Key> =
+            JsCast::unchecked_into(js_sys::Object::new());
         inner.set_list_complete(true);
         inner.set_keys(keys);
         inner.set_cache_status(cache_status);
         KVNamespaceListResultBuilder { inner }
     }
 }
-pub struct KVNamespaceListResultBuilder {
-    inner: KVNamespaceListResult,
+pub struct KVNamespaceListResultBuilder<
+    Metadata: ::wasm_bindgen::JsGeneric,
+    Key: ::wasm_bindgen::JsGeneric,
+> {
+    inner: KVNamespaceListResult<Metadata, Key>,
 }
-impl KVNamespaceListResultBuilder {
+impl<Metadata: ::wasm_bindgen::JsGeneric, Key: ::wasm_bindgen::JsGeneric>
+    KVNamespaceListResultBuilder<Metadata, Key>
+{
     pub fn cursor(self, val: &str) -> Self {
         self.inner.set_cursor(val);
         self
     }
-    pub fn build(self) -> KVNamespaceListResult {
+    pub fn build(self) -> KVNamespaceListResult<Metadata, Key> {
         self.inner
     }
 }
@@ -8306,7 +8341,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn list<Key: ::wasm_bindgen::JsGeneric, Metadata: ::wasm_bindgen::JsGeneric>(
         this: &KVNamespace<Key>,
-    ) -> Result<KVNamespaceListResult, JsValue>;
+    ) -> Result<KVNamespaceListResult<Metadata, Key>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "list")]
     pub async fn list_with_options<
         Key: ::wasm_bindgen::JsGeneric,
@@ -8314,7 +8349,7 @@ extern "C" {
     >(
         this: &KVNamespace<Key>,
         options: &KVNamespaceListOptions,
-    ) -> Result<KVNamespaceListResult, JsValue>;
+    ) -> Result<KVNamespaceListResult<Metadata, Key>, JsValue>;
     #[wasm_bindgen(method, catch)]
     pub async fn put<Key: ::wasm_bindgen::JsGeneric>(
         this: &KVNamespace<Key>,
@@ -9035,10 +9070,10 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn get(this: &R2Bucket, key: &str) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "get")]
-    pub async fn get_with_js_value(
+    pub async fn get_with_r2_bucket_options(
         this: &R2Bucket,
         key: &str,
-        options: &JsValue,
+        options: &R2BucketOptions,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "get")]
     pub async fn get_with_r2_get_options(
@@ -9077,39 +9112,39 @@ extern "C" {
         value: &Blob,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
-    pub async fn put_with_readable_stream_and_js_value(
+    pub async fn put_with_readable_stream_and_r2_bucket_options2(
         this: &R2Bucket,
         key: &str,
         value: &ReadableStream,
-        options: &JsValue,
+        options: &R2BucketOptions2,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
-    pub async fn put_with_array_buffer_and_js_value(
+    pub async fn put_with_array_buffer_and_r2_bucket_options2(
         this: &R2Bucket,
         key: &str,
         value: &ArrayBuffer,
-        options: &JsValue,
+        options: &R2BucketOptions2,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
-    pub async fn put_with_typed_array_and_js_value(
+    pub async fn put_with_typed_array_and_r2_bucket_options2(
         this: &R2Bucket,
         key: &str,
         value: &Object,
-        options: &JsValue,
+        options: &R2BucketOptions2,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
-    pub async fn put_with_str_and_js_value(
+    pub async fn put_with_str_and_r2_bucket_options2(
         this: &R2Bucket,
         key: &str,
         value: &str,
-        options: &JsValue,
+        options: &R2BucketOptions2,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
-    pub async fn put_with_blob_and_js_value(
+    pub async fn put_with_blob_and_r2_bucket_options2(
         this: &R2Bucket,
         key: &str,
         value: &Blob,
-        options: &JsValue,
+        options: &R2BucketOptions2,
     ) -> Result<JsOption<R2Object>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
     pub async fn put_with_readable_stream_and_r2_put_options(
@@ -9180,6 +9215,54 @@ extern "C" {
         this: &R2Bucket,
         options: &R2ListOptions,
     ) -> Result<JsValue, JsValue>;
+}
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = R2GetOptions , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type R2BucketOptions;
+    #[wasm_bindgen(method, getter, js_name = "onlyIf")]
+    pub fn only_if(this: &R2BucketOptions) -> OnlyIfKind;
+    #[wasm_bindgen(method, setter, js_name = "onlyIf")]
+    pub fn set_only_if(this: &R2BucketOptions, val: &R2Conditional);
+    #[wasm_bindgen(method, setter, js_name = "onlyIf")]
+    pub fn set_only_if_with_headers(this: &R2BucketOptions, val: &Headers);
+}
+impl R2BucketOptions {
+    pub fn new(only_if: &R2Conditional) -> R2BucketOptions {
+        let inner: R2BucketOptions = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_only_if(only_if);
+        inner
+    }
+    pub fn new_with_headers(only_if: &Headers) -> R2BucketOptions {
+        let inner: R2BucketOptions = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_only_if_with_headers(only_if);
+        inner
+    }
+}
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = R2PutOptions , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type R2BucketOptions2;
+    #[wasm_bindgen(method, getter, js_name = "onlyIf")]
+    pub fn only_if(this: &R2BucketOptions2) -> OnlyIfKind;
+    #[wasm_bindgen(method, setter, js_name = "onlyIf")]
+    pub fn set_only_if(this: &R2BucketOptions2, val: &R2Conditional);
+    #[wasm_bindgen(method, setter, js_name = "onlyIf")]
+    pub fn set_only_if_with_headers(this: &R2BucketOptions2, val: &Headers);
+}
+impl R2BucketOptions2 {
+    pub fn new(only_if: &R2Conditional) -> R2BucketOptions2 {
+        let inner: R2BucketOptions2 = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_only_if(only_if);
+        inner
+    }
+    pub fn new_with_headers(only_if: &Headers) -> R2BucketOptions2 {
+        let inner: R2BucketOptions2 = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_only_if_with_headers(only_if);
+        inner
+    }
 }
 #[wasm_bindgen]
 extern "C" {
@@ -10519,22 +10602,22 @@ impl StreamPipeOptionsBuilder {
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub type ReadableStreamReadResult;
+    pub type ReadableStreamReadResult<R: ::wasm_bindgen::JsGeneric>;
     #[wasm_bindgen(method, getter)]
-    pub fn done(this: &ReadableStreamReadResult) -> bool;
+    pub fn done<R: ::wasm_bindgen::JsGeneric>(this: &ReadableStreamReadResult<R>) -> bool;
     #[wasm_bindgen(method, setter)]
-    pub fn set_done(this: &ReadableStreamReadResult, val: bool);
+    pub fn set_done<R: ::wasm_bindgen::JsGeneric>(this: &ReadableStreamReadResult<R>, val: bool);
     #[wasm_bindgen(method, getter)]
-    pub fn value(this: &ReadableStreamReadResult) -> Option<R>;
+    pub fn value<R: ::wasm_bindgen::JsGeneric>(this: &ReadableStreamReadResult<R>) -> Option<R>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_value(this: &ReadableStreamReadResult, val: &R);
+    pub fn set_value<R: ::wasm_bindgen::JsGeneric>(this: &ReadableStreamReadResult<R>, val: &R);
 }
-impl ReadableStreamReadResult {
+impl<R: ::wasm_bindgen::JsGeneric> ReadableStreamReadResult<R> {
     #[doc = " ## Inlined fields"]
     #[doc = ""]
     #[doc = " * `done: false`"]
-    pub fn new_false(value: &R) -> ReadableStreamReadResult {
-        let inner: ReadableStreamReadResult = JsCast::unchecked_into(js_sys::Object::new());
+    pub fn new_false(value: &R) -> ReadableStreamReadResult<R> {
+        let inner: ReadableStreamReadResult<R> = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_done(false);
         inner.set_value(value);
         inner
@@ -10542,27 +10625,27 @@ impl ReadableStreamReadResult {
     #[doc = " ## Inlined fields"]
     #[doc = ""]
     #[doc = " * `done: true`"]
-    pub fn new_true() -> ReadableStreamReadResult {
+    pub fn new_true() -> ReadableStreamReadResult<R> {
         Self::builder_true().build()
     }
     #[doc = " ## Inlined fields"]
     #[doc = ""]
     #[doc = " * `done: true`"]
-    pub fn builder_true() -> ReadableStreamReadResultBuilder {
-        let inner: ReadableStreamReadResult = JsCast::unchecked_into(js_sys::Object::new());
+    pub fn builder_true() -> ReadableStreamReadResultBuilder<R> {
+        let inner: ReadableStreamReadResult<R> = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_done(true);
         ReadableStreamReadResultBuilder { inner }
     }
 }
-pub struct ReadableStreamReadResultBuilder {
-    inner: ReadableStreamReadResult,
+pub struct ReadableStreamReadResultBuilder<R: ::wasm_bindgen::JsGeneric> {
+    inner: ReadableStreamReadResult<R>,
 }
-impl ReadableStreamReadResultBuilder {
+impl<R: ::wasm_bindgen::JsGeneric> ReadableStreamReadResultBuilder<R> {
     pub fn value(self, val: &R) -> Self {
         self.inner.set_value(val);
         self
     }
-    pub fn build(self) -> ReadableStreamReadResult {
+    pub fn build(self) -> ReadableStreamReadResult<R> {
         self.inner
     }
 }
@@ -10729,7 +10812,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn read<R: ::wasm_bindgen::JsGeneric>(
         this: &ReadableStreamDefaultReader<R>,
-    ) -> Result<ReadableStreamReadResult, JsValue>;
+    ) -> Result<ReadableStreamReadResult<R>, JsValue>;
     #[doc = " The **`releaseLock()`** method of the ReadableStreamDefaultReader interface releases the reader's lock on the stream."]
     #[doc = ""]
     #[doc = " [MDN Reference](https://developer.mozilla.org/docs/Web/API/ReadableStreamDefaultReader/releaseLock)"]
@@ -10766,7 +10849,7 @@ extern "C" {
     pub async fn read<T: ::wasm_bindgen::JsGeneric>(
         this: &ReadableStreamBYOBReader,
         view: &T,
-    ) -> Result<ReadableStreamReadResult, JsValue>;
+    ) -> Result<ReadableStreamReadResult<T>, JsValue>;
     #[doc = " The **`releaseLock()`** method of the ReadableStreamBYOBReader interface releases the reader's lock on the stream."]
     #[doc = ""]
     #[doc = " [MDN Reference](https://developer.mozilla.org/docs/Web/API/ReadableStreamBYOBReader/releaseLock)"]
@@ -10782,7 +10865,7 @@ extern "C" {
         this: &ReadableStreamBYOBReader,
         min_elements: f64,
         view: &T,
-    ) -> Result<ReadableStreamReadResult, JsValue>;
+    ) -> Result<ReadableStreamReadResult<T>, JsValue>;
 }
 #[wasm_bindgen]
 extern "C" {
@@ -15204,9 +15287,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn role(this: &RoleScopedChatInput) -> RoleKind;
     #[wasm_bindgen(method, setter)]
-    pub fn set_role(this: &RoleScopedChatInput, val: RoleKind);
-    #[wasm_bindgen(method, setter, js_name = "role")]
-    pub fn set_role_with_js_value(this: &RoleScopedChatInput, val: &JsValue);
+    pub fn set_role(this: &RoleScopedChatInput, val: &str);
     #[wasm_bindgen(method, getter)]
     pub fn content(this: &RoleScopedChatInput) -> String;
     #[wasm_bindgen(method, setter)]
@@ -15241,7 +15322,7 @@ impl RoleScopedChatInput {
     pub fn new_tool(content: &str) -> RoleScopedChatInput {
         Self::builder_tool(content).build()
     }
-    pub fn new(role: &JsValue, content: &str) -> RoleScopedChatInput {
+    pub fn new(role: &str, content: &str) -> RoleScopedChatInput {
         Self::builder(role, content).build()
     }
     #[doc = " ## Inlined fields"]
@@ -15249,7 +15330,7 @@ impl RoleScopedChatInput {
     #[doc = " * `role: \"user\"`"]
     pub fn builder_user(content: &str) -> RoleScopedChatInputBuilder {
         let inner: RoleScopedChatInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_role(RoleKind::User);
+        inner.set_role("user");
         inner.set_content(content);
         RoleScopedChatInputBuilder { inner }
     }
@@ -15258,7 +15339,7 @@ impl RoleScopedChatInput {
     #[doc = " * `role: \"assistant\"`"]
     pub fn builder_assistant(content: &str) -> RoleScopedChatInputBuilder {
         let inner: RoleScopedChatInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_role(RoleKind::Assistant);
+        inner.set_role("assistant");
         inner.set_content(content);
         RoleScopedChatInputBuilder { inner }
     }
@@ -15267,7 +15348,7 @@ impl RoleScopedChatInput {
     #[doc = " * `role: \"system\"`"]
     pub fn builder_system(content: &str) -> RoleScopedChatInputBuilder {
         let inner: RoleScopedChatInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_role(RoleKind::System);
+        inner.set_role("system");
         inner.set_content(content);
         RoleScopedChatInputBuilder { inner }
     }
@@ -15276,13 +15357,13 @@ impl RoleScopedChatInput {
     #[doc = " * `role: \"tool\"`"]
     pub fn builder_tool(content: &str) -> RoleScopedChatInputBuilder {
         let inner: RoleScopedChatInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_role(RoleKind::Tool);
+        inner.set_role("tool");
         inner.set_content(content);
         RoleScopedChatInputBuilder { inner }
     }
-    pub fn builder(role: &JsValue, content: &str) -> RoleScopedChatInputBuilder {
+    pub fn builder(role: &str, content: &str) -> RoleScopedChatInputBuilder {
         let inner: RoleScopedChatInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_role_with_js_value(role);
+        inner.set_role(role);
         inner.set_content(content);
         RoleScopedChatInputBuilder { inner }
     }
@@ -15348,9 +15429,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "type")]
     pub fn type_(this: &AiTextGenerationToolInput) -> AiTextGenerationToolInputTypeKind;
     #[wasm_bindgen(method, setter)]
-    pub fn set_type(this: &AiTextGenerationToolInput, val: AiTextGenerationToolInputTypeKind);
-    #[wasm_bindgen(method, setter, js_name = "type")]
-    pub fn set_type_with_js_value(this: &AiTextGenerationToolInput, val: &JsValue);
+    pub fn set_type(this: &AiTextGenerationToolInput, val: &str);
     #[wasm_bindgen(method, getter)]
     pub fn function(this: &AiTextGenerationToolInput) -> Object;
     #[wasm_bindgen(method, setter)]
@@ -15362,13 +15441,13 @@ impl AiTextGenerationToolInput {
     #[doc = " * `type: \"function\"`"]
     pub fn new_function(function: &Object) -> AiTextGenerationToolInput {
         let inner: AiTextGenerationToolInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_type(AiTextGenerationToolInputTypeKind::Function);
+        inner.set_type("function");
         inner.set_function(function);
         inner
     }
-    pub fn new(r#type: &JsValue, function: &Object) -> AiTextGenerationToolInput {
+    pub fn new(r#type: &str, function: &Object) -> AiTextGenerationToolInput {
         let inner: AiTextGenerationToolInput = JsCast::unchecked_into(js_sys::Object::new());
-        inner.set_type_with_js_value(r#type);
+        inner.set_type(r#type);
         inner.set_function(function);
         inner
     }
@@ -15498,7 +15577,7 @@ extern "C" {
         val: &[AiTextGenerationToolLegacyInput],
     );
     #[wasm_bindgen(method, setter, js_name = "tools")]
-    pub fn set_tools_with_js_value(this: &AiTextGenerationInput, val: &JsValue);
+    pub fn set_tools_with_object(this: &AiTextGenerationInput, val: &Object);
     #[wasm_bindgen(method, getter)]
     pub fn functions(this: &AiTextGenerationInput) -> Option<Vec<AiTextGenerationFunctionsInput>>;
     #[wasm_bindgen(method, setter, slice_to_array)]
@@ -15578,8 +15657,8 @@ impl AiTextGenerationInputBuilder {
         self.inner.set_tools_with_slice(val);
         self
     }
-    pub fn tools_with_js_value(self, val: &JsValue) -> Self {
-        self.inner.set_tools_with_js_value(val);
+    pub fn tools_with_object(self, val: &Object) -> Self {
+        self.inner.set_tools_with_object(val);
         self
     }
     pub fn functions(self, val: &[AiTextGenerationFunctionsInput]) -> Self {
@@ -20299,10 +20378,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_image(this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Prompt, val: &[f64]);
     #[wasm_bindgen(method, setter, js_name = "image")]
-    pub fn set_image_with_js_value(
-        this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Prompt,
-        val: &JsValue,
-    );
+    pub fn set_image_with_str(this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Prompt, val: &str);
     #[doc = " If true, a chat template is not applied and you must adhere to the specific model's expected formatting."]
     #[wasm_bindgen(method, getter)]
     pub fn raw(this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Prompt) -> Option<bool>;
@@ -20383,8 +20459,8 @@ impl Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_PromptBuilder {
         self.inner.set_image(val);
         self
     }
-    pub fn image_with_js_value(self, val: &JsValue) -> Self {
-        self.inner.set_image_with_js_value(val);
+    pub fn image_with_str(self, val: &str) -> Self {
+        self.inner.set_image_with_str(val);
         self
     }
     pub fn raw(self, val: bool) -> Self {
@@ -20450,10 +20526,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_image(this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Messages, val: &[f64]);
     #[wasm_bindgen(method, setter, js_name = "image")]
-    pub fn set_image_with_js_value(
-        this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Messages,
-        val: &JsValue,
-    );
+    pub fn set_image_with_str(this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Messages, val: &str);
     #[wasm_bindgen(method, getter)]
     pub fn functions(
         this: &Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_Messages,
@@ -20546,8 +20619,8 @@ impl Ai_Cf_Meta_Llama_3_2_11B_Vision_Instruct_MessagesBuilder {
         self.inner.set_image(val);
         self
     }
-    pub fn image_with_js_value(self, val: &JsValue) -> Self {
-        self.inner.set_image_with_js_value(val);
+    pub fn image_with_str(self, val: &str) -> Self {
+        self.inner.set_image_with_str(val);
         self
     }
     pub fn functions(self, val: &[Object]) -> Self {
@@ -29095,8 +29168,39 @@ impl GatewayOptionsBuilder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type UniversalGatewayOptions = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = GatewayOptions , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type UniversalGatewayOptions;
+    #[doc = " * @deprecated"]
+    #[wasm_bindgen(method, getter)]
+    pub fn id(this: &UniversalGatewayOptions) -> Option<String>;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_id(this: &UniversalGatewayOptions, val: &str);
+}
+impl UniversalGatewayOptions {
+    pub fn new() -> UniversalGatewayOptions {
+        Self::builder().build()
+    }
+    pub fn builder() -> UniversalGatewayOptionsBuilder {
+        UniversalGatewayOptionsBuilder {
+            inner: JsCast::unchecked_into(js_sys::Object::new()),
+        }
+    }
+}
+pub struct UniversalGatewayOptionsBuilder {
+    inner: UniversalGatewayOptions,
+}
+impl UniversalGatewayOptionsBuilder {
+    pub fn id(self, val: &str) -> Self {
+        self.inner.set_id(val);
+        self
+    }
+    pub fn build(self) -> UniversalGatewayOptions {
+        self.inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -29618,9 +29722,9 @@ extern "C" {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type AiGatewayOptions;
     #[wasm_bindgen(method, getter)]
-    pub fn gateway(this: &AiGatewayOptions) -> JsValue;
+    pub fn gateway(this: &AiGatewayOptions) -> Option<UniversalGatewayOptions>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_gateway(this: &AiGatewayOptions, val: &JsValue);
+    pub fn set_gateway(this: &AiGatewayOptions, val: &UniversalGatewayOptions);
     #[wasm_bindgen(method, getter, js_name = "extraHeaders")]
     pub fn extra_headers(this: &AiGatewayOptions) -> Option<Object>;
     #[wasm_bindgen(method, setter, js_name = "extraHeaders")]
@@ -29640,7 +29744,7 @@ pub struct AiGatewayOptionsBuilder {
     inner: AiGatewayOptions,
 }
 impl AiGatewayOptionsBuilder {
-    pub fn gateway(self, val: &JsValue) -> Self {
+    pub fn gateway(self, val: &UniversalGatewayOptions) -> Self {
         self.inner.set_gateway(val);
         self
     }
@@ -29988,10 +30092,66 @@ impl AutoRagSearchRequestBuilder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type AutoRagAiSearchRequest = JsValue;
-#[allow(dead_code)]
-pub type AutoRagAiSearchRequestStreaming = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = AutoRagSearchRequest , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type AutoRagAiSearchRequest;
+    #[wasm_bindgen(method, getter)]
+    pub fn stream(this: &AutoRagAiSearchRequest) -> Option<bool>;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_stream(this: &AutoRagAiSearchRequest, val: bool);
+    #[wasm_bindgen(method, getter)]
+    pub fn system_prompt(this: &AutoRagAiSearchRequest) -> Option<String>;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_system_prompt(this: &AutoRagAiSearchRequest, val: &str);
+}
+impl AutoRagAiSearchRequest {
+    pub fn new() -> AutoRagAiSearchRequest {
+        Self::builder().build()
+    }
+    pub fn builder() -> AutoRagAiSearchRequestBuilder {
+        AutoRagAiSearchRequestBuilder {
+            inner: JsCast::unchecked_into(js_sys::Object::new()),
+        }
+    }
+}
+pub struct AutoRagAiSearchRequestBuilder {
+    inner: AutoRagAiSearchRequest,
+}
+impl AutoRagAiSearchRequestBuilder {
+    pub fn stream(self, val: bool) -> Self {
+        self.inner.set_stream(val);
+        self
+    }
+    pub fn system_prompt(self, val: &str) -> Self {
+        self.inner.set_system_prompt(val);
+        self
+    }
+    pub fn build(self) -> AutoRagAiSearchRequest {
+        self.inner
+    }
+}
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = AutoRagAiSearchRequest , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type AutoRagAiSearchRequestStreaming;
+    #[wasm_bindgen(method, getter)]
+    pub fn stream(this: &AutoRagAiSearchRequestStreaming) -> bool;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_stream(this: &AutoRagAiSearchRequestStreaming, val: bool);
+}
+impl AutoRagAiSearchRequestStreaming {
+    #[doc = " ## Inlined fields"]
+    #[doc = ""]
+    #[doc = " * `stream: true`"]
+    pub fn new_true() -> AutoRagAiSearchRequestStreaming {
+        let inner: AutoRagAiSearchRequestStreaming = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_stream(true);
+        inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -30039,8 +30199,23 @@ impl AutoRagSearchResponse {
 }
 #[allow(dead_code)]
 pub type AutoRagListResponse = Array<Object>;
-#[allow(dead_code)]
-pub type AutoRagAiSearchResponse = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = AutoRagSearchResponse , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type AutoRagAiSearchResponse;
+    #[wasm_bindgen(method, getter)]
+    pub fn response(this: &AutoRagAiSearchResponse) -> String;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_response(this: &AutoRagAiSearchResponse, val: &str);
+}
+impl AutoRagAiSearchResponse {
+    pub fn new(response: &str) -> AutoRagAiSearchResponse {
+        let inner: AutoRagAiSearchResponse = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_response(response);
+        inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -30061,7 +30236,17 @@ extern "C" {
     #[doc = " @deprecated Use `env.AI.aiSearch.get(id).chatCompletions(...)` instead."]
     #[doc = " @see AiSearchInstanceService.chatCompletions"]
     #[wasm_bindgen(method, catch, js_name = "aiSearch")]
-    pub async fn ai_search(this: &AutoRAG, params: &JsValue) -> Result<Response, JsValue>;
+    pub async fn ai_search(
+        this: &AutoRAG,
+        params: &AutoRagAiSearchRequestStreaming,
+    ) -> Result<Response, JsValue>;
+    #[doc = " @deprecated Use `env.AI.aiSearch.get(id).chatCompletions(...)` instead."]
+    #[doc = " @see AiSearchInstanceService.chatCompletions"]
+    #[wasm_bindgen(method, catch, js_name = "aiSearch")]
+    pub async fn ai_search_with_auto_rag_ai_search_request(
+        this: &AutoRAG,
+        params: &AutoRagAiSearchRequest,
+    ) -> Result<Response, JsValue>;
 }
 #[wasm_bindgen]
 extern "C" {
@@ -30847,8 +31032,12 @@ impl RequestInitCfPropertiesR2Builder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type IncomingRequestCfProperties<HostMetadata> = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = IncomingRequestCfPropertiesBase , extends = IncomingRequestCfPropertiesBotManagementEnterprise , extends = IncomingRequestCfPropertiesCloudflareForSaaSEnterprise , extends = IncomingRequestCfPropertiesGeographicInformation , extends = IncomingRequestCfPropertiesCloudflareAccessOrApiShield , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type IncomingRequestCfProperties<HostMetadata: ::wasm_bindgen::JsGeneric>;
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -31654,16 +31843,20 @@ extern "C" {
     pub type IncomingRequestCfPropertiesBotManagementEnterprise;
     #[doc = " Results of Cloudflare's Bot Management analysis"]
     #[wasm_bindgen(method, getter, js_name = "botManagement")]
-    pub fn bot_management(this: &IncomingRequestCfPropertiesBotManagementEnterprise) -> JsValue;
+    pub fn bot_management(
+        this: &IncomingRequestCfPropertiesBotManagementEnterprise,
+    ) -> IncomingRequestCfPropertiesBotManagementBase;
     #[wasm_bindgen(method, setter, js_name = "botManagement")]
     pub fn set_bot_management(
         this: &IncomingRequestCfPropertiesBotManagementEnterprise,
-        val: &JsValue,
+        val: &IncomingRequestCfPropertiesBotManagementBase,
     );
 }
 impl IncomingRequestCfPropertiesBotManagementEnterprise {
     #[doc = " * `bot_management` - Results of Cloudflare's Bot Management analysis"]
-    pub fn new(bot_management: &JsValue) -> IncomingRequestCfPropertiesBotManagementEnterprise {
+    pub fn new(
+        bot_management: &IncomingRequestCfPropertiesBotManagementBase,
+    ) -> IncomingRequestCfPropertiesBotManagementEnterprise {
         let inner: IncomingRequestCfPropertiesBotManagementEnterprise =
             JsCast::unchecked_into(js_sys::Object::new());
         inner.set_bot_management(bot_management);
@@ -32972,8 +33165,23 @@ impl D1ResponseBuilder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type D1Result<T> = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = D1Response , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type D1Result<T: ::wasm_bindgen::JsGeneric>;
+    #[wasm_bindgen(method, getter)]
+    pub fn results<T: ::wasm_bindgen::JsGeneric>(this: &D1Result<T>) -> Vec<T>;
+    #[wasm_bindgen(method, setter, slice_to_array)]
+    pub fn set_results<T: ::wasm_bindgen::JsGeneric>(this: &D1Result<T>, val: &[T]);
+}
+impl<T: ::wasm_bindgen::JsGeneric> D1Result<T> {
+    pub fn new(results: &[T]) -> D1Result<T> {
+        let inner: D1Result<T> = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_results(results);
+        inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -35304,58 +35512,165 @@ pub type Params<P> = Object;
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub type EventContext;
+    pub type EventContext<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >;
     #[wasm_bindgen(method, getter)]
-    pub fn request(this: &EventContext) -> Request<JsValue, IncomingRequestCfProperties<JsValue>>;
+    pub fn request<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Request<JsValue, IncomingRequestCfProperties<JsValue>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_request(
-        this: &EventContext,
+    pub fn set_request<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
         val: &Request<JsValue, IncomingRequestCfProperties<JsValue>>,
     );
     #[wasm_bindgen(method, getter, js_name = "functionPath")]
-    pub fn function_path(this: &EventContext) -> String;
+    pub fn function_path<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> String;
     #[wasm_bindgen(method, setter, js_name = "functionPath")]
-    pub fn set_function_path(this: &EventContext, val: &str);
+    pub fn set_function_path<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &str,
+    );
     #[wasm_bindgen(method, getter, js_name = "waitUntil")]
-    pub fn wait_until(this: &EventContext) -> Function<fn(Promise) -> Undefined>;
+    pub fn wait_until<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Function<fn(Promise) -> Undefined>;
     #[wasm_bindgen(method, setter, js_name = "waitUntil")]
-    pub fn set_wait_until(this: &EventContext, val: &Function<fn(Promise) -> Undefined>);
+    pub fn set_wait_until<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &Function<fn(Promise) -> Undefined>,
+    );
     #[wasm_bindgen(method, getter, js_name = "passThroughOnException")]
-    pub fn pass_through_on_exception(this: &EventContext) -> Function<fn() -> Undefined>;
+    pub fn pass_through_on_exception<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Function<fn() -> Undefined>;
     #[wasm_bindgen(method, setter, js_name = "passThroughOnException")]
-    pub fn set_pass_through_on_exception(this: &EventContext, val: &Function<fn() -> Undefined>);
+    pub fn set_pass_through_on_exception<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &Function<fn() -> Undefined>,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn next(this: &EventContext) -> Function<fn(JsValue, RequestInit) -> Promise<Response>>;
+    pub fn next<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Function<fn(JsValue, RequestInit) -> Promise<Response>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_next(
-        this: &EventContext,
+    pub fn set_next<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
         val: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
     );
     #[wasm_bindgen(method, getter)]
-    pub fn env(this: &EventContext) -> JsValue;
+    pub fn env<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Env;
     #[wasm_bindgen(method, setter)]
-    pub fn set_env(this: &EventContext, val: &JsValue);
+    pub fn set_env<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &Env,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn params(this: &EventContext) -> Params<P>;
+    pub fn params<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Params<P>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_params(this: &EventContext, val: &Params<P>);
+    pub fn set_params<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &Params<P>,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn data(this: &EventContext) -> Data;
+    pub fn data<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+    ) -> Data;
     #[wasm_bindgen(method, setter)]
-    pub fn set_data(this: &EventContext, val: &Data);
+    pub fn set_data<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventContext<Env, P, Data>,
+        val: &Data,
+    );
 }
-impl EventContext {
+impl<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+    > EventContext<Env, P, Data>
+{
     pub fn new(
         request: &Request<JsValue, IncomingRequestCfProperties<JsValue>>,
         function_path: &str,
         wait_until: &Function<fn(Promise) -> Undefined>,
         pass_through_on_exception: &Function<fn() -> Undefined>,
         next: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
-        env: &JsValue,
+        env: &Env,
         params: &Params<P>,
         data: &Data,
-    ) -> EventContext {
-        let inner: EventContext = JsCast::unchecked_into(js_sys::Object::new());
+    ) -> EventContext<Env, P, Data> {
+        let inner: EventContext<Env, P, Data> = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_request(request);
         inner.set_function_path(function_path);
         inner.set_wait_until(wait_until);
@@ -35368,75 +35683,210 @@ impl EventContext {
     }
 }
 #[allow(dead_code)]
-pub type PagesFunction<Env, Params, Data> = Function<fn(EventContext) -> JsValue>;
+pub type PagesFunction<Env, Params, Data> =
+    Function<fn(EventContext<Env, Params, Data>) -> JsValue>;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
-    pub type EventPluginContext;
+    pub type EventPluginContext<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >;
     #[wasm_bindgen(method, getter)]
-    pub fn request(
-        this: &EventPluginContext,
+    pub fn request<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
     ) -> Request<JsValue, IncomingRequestCfProperties<JsValue>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_request(
-        this: &EventPluginContext,
+    pub fn set_request<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
         val: &Request<JsValue, IncomingRequestCfProperties<JsValue>>,
     );
     #[wasm_bindgen(method, getter, js_name = "functionPath")]
-    pub fn function_path(this: &EventPluginContext) -> String;
+    pub fn function_path<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> String;
     #[wasm_bindgen(method, setter, js_name = "functionPath")]
-    pub fn set_function_path(this: &EventPluginContext, val: &str);
+    pub fn set_function_path<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &str,
+    );
     #[wasm_bindgen(method, getter, js_name = "waitUntil")]
-    pub fn wait_until(this: &EventPluginContext) -> Function<fn(Promise) -> Undefined>;
+    pub fn wait_until<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> Function<fn(Promise) -> Undefined>;
     #[wasm_bindgen(method, setter, js_name = "waitUntil")]
-    pub fn set_wait_until(this: &EventPluginContext, val: &Function<fn(Promise) -> Undefined>);
+    pub fn set_wait_until<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &Function<fn(Promise) -> Undefined>,
+    );
     #[wasm_bindgen(method, getter, js_name = "passThroughOnException")]
-    pub fn pass_through_on_exception(this: &EventPluginContext) -> Function<fn() -> Undefined>;
+    pub fn pass_through_on_exception<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> Function<fn() -> Undefined>;
     #[wasm_bindgen(method, setter, js_name = "passThroughOnException")]
-    pub fn set_pass_through_on_exception(
-        this: &EventPluginContext,
+    pub fn set_pass_through_on_exception<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
         val: &Function<fn() -> Undefined>,
     );
     #[wasm_bindgen(method, getter)]
-    pub fn next(
-        this: &EventPluginContext,
+    pub fn next<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
     ) -> Function<fn(JsValue, RequestInit) -> Promise<Response>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_next(
-        this: &EventPluginContext,
+    pub fn set_next<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
         val: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
     );
     #[wasm_bindgen(method, getter)]
-    pub fn env(this: &EventPluginContext) -> JsValue;
+    pub fn env<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> Env;
     #[wasm_bindgen(method, setter)]
-    pub fn set_env(this: &EventPluginContext, val: &JsValue);
+    pub fn set_env<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &Env,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn params(this: &EventPluginContext) -> Params<P>;
+    pub fn params<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> Params<P>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_params(this: &EventPluginContext, val: &Params<P>);
+    pub fn set_params<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &Params<P>,
+    );
     #[wasm_bindgen(method, getter)]
-    pub fn data(this: &EventPluginContext) -> Data;
+    pub fn data<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> Data;
     #[wasm_bindgen(method, setter)]
-    pub fn set_data(this: &EventPluginContext, val: &Data);
+    pub fn set_data<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &Data,
+    );
     #[wasm_bindgen(method, getter, js_name = "pluginArgs")]
-    pub fn plugin_args(this: &EventPluginContext) -> PluginArgs;
+    pub fn plugin_args<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+    ) -> PluginArgs;
     #[wasm_bindgen(method, setter, js_name = "pluginArgs")]
-    pub fn set_plugin_args(this: &EventPluginContext, val: &PluginArgs);
+    pub fn set_plugin_args<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    >(
+        this: &EventPluginContext<Env, P, Data, PluginArgs>,
+        val: &PluginArgs,
+    );
 }
-impl EventPluginContext {
+impl<
+        Env: ::wasm_bindgen::JsGeneric,
+        P: ::wasm_bindgen::JsGeneric,
+        Data: ::wasm_bindgen::JsGeneric,
+        PluginArgs: ::wasm_bindgen::JsGeneric,
+    > EventPluginContext<Env, P, Data, PluginArgs>
+{
     pub fn new(
         request: &Request<JsValue, IncomingRequestCfProperties<JsValue>>,
         function_path: &str,
         wait_until: &Function<fn(Promise) -> Undefined>,
         pass_through_on_exception: &Function<fn() -> Undefined>,
         next: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
-        env: &JsValue,
+        env: &Env,
         params: &Params<P>,
         data: &Data,
         plugin_args: &PluginArgs,
-    ) -> EventPluginContext {
-        let inner: EventPluginContext = JsCast::unchecked_into(js_sys::Object::new());
+    ) -> EventPluginContext<Env, P, Data, PluginArgs> {
+        let inner: EventPluginContext<Env, P, Data, PluginArgs> =
+            JsCast::unchecked_into(js_sys::Object::new());
         inner.set_request(request);
         inner.set_function_path(function_path);
         inner.set_wait_until(wait_until);
@@ -35451,12 +35901,12 @@ impl EventPluginContext {
 }
 #[allow(dead_code)]
 pub type PagesPluginFunction<Env, Params, Data, PluginArgs> =
-    Function<fn(EventPluginContext) -> JsValue>;
+    Function<fn(EventPluginContext<Env, Params, Data, PluginArgs>) -> JsValue>;
 #[wasm_bindgen(module = "assets:*")]
 extern "C" {
     #[allow(non_upper_case_globals)]
     #[wasm_bindgen(thread_local_v2, js_name = "onRequest")]
-    pub static on_request: Function<fn(EventContext) -> JsValue>;
+    pub static on_request: Function<fn(EventContext<Env, Object, Data>) -> JsValue>;
 }
 #[wasm_bindgen(module = "cloudflare:pipelines")]
 extern "C" {
@@ -35740,6 +36190,12 @@ pub mod rpc {
         pub fn try_dup<T: ::wasm_bindgen::JsGeneric>(
             this: &StubBase<T>,
         ) -> Result<JsValue, JsValue>;
+    }
+    #[wasm_bindgen]
+    extern "C" {
+        # [wasm_bindgen (extends = StubBase , extends = Object , js_namespace = "Rpc")]
+        #[derive(Debug, Clone, PartialEq)]
+        pub type Stub<T: ::wasm_bindgen::JsGeneric>;
     }
 }
 pub mod cloudflare {
@@ -36080,23 +36536,23 @@ pub mod cloudflare_workers_module {
     extern "C" {
         # [wasm_bindgen (extends = Object , js_namespace = "CloudflareWorkersModule")]
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub type WorkflowEvent;
+        pub type WorkflowEvent<T: ::wasm_bindgen::JsGeneric>;
         #[wasm_bindgen(method, getter)]
-        pub fn payload(this: &WorkflowEvent) -> Readonly;
+        pub fn payload<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>) -> Readonly;
         #[wasm_bindgen(method, setter)]
-        pub fn set_payload(this: &WorkflowEvent, val: &Readonly);
+        pub fn set_payload<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>, val: &Readonly);
         #[wasm_bindgen(method, getter)]
-        pub fn timestamp(this: &WorkflowEvent) -> Date;
+        pub fn timestamp<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>) -> Date;
         #[wasm_bindgen(method, setter)]
-        pub fn set_timestamp(this: &WorkflowEvent, val: &Date);
+        pub fn set_timestamp<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>, val: &Date);
         #[wasm_bindgen(method, getter, js_name = "instanceId")]
-        pub fn instance_id(this: &WorkflowEvent) -> String;
+        pub fn instance_id<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>) -> String;
         #[wasm_bindgen(method, setter, js_name = "instanceId")]
-        pub fn set_instance_id(this: &WorkflowEvent, val: &str);
+        pub fn set_instance_id<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowEvent<T>, val: &str);
     }
-    impl WorkflowEvent {
-        pub fn new(payload: &Readonly, timestamp: &Date, instance_id: &str) -> WorkflowEvent {
-            let inner: WorkflowEvent = JsCast::unchecked_into(js_sys::Object::new());
+    impl<T: ::wasm_bindgen::JsGeneric> WorkflowEvent<T> {
+        pub fn new(payload: &Readonly, timestamp: &Date, instance_id: &str) -> WorkflowEvent<T> {
+            let inner: WorkflowEvent<T> = JsCast::unchecked_into(js_sys::Object::new());
             inner.set_payload(payload);
             inner.set_timestamp(timestamp);
             inner.set_instance_id(instance_id);
@@ -36107,23 +36563,26 @@ pub mod cloudflare_workers_module {
     extern "C" {
         # [wasm_bindgen (extends = Object , js_namespace = "CloudflareWorkersModule")]
         #[derive(Debug, Clone, PartialEq, Eq)]
-        pub type WorkflowStepEvent;
+        pub type WorkflowStepEvent<T: ::wasm_bindgen::JsGeneric>;
         #[wasm_bindgen(method, getter)]
-        pub fn payload(this: &WorkflowStepEvent) -> Readonly;
+        pub fn payload<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowStepEvent<T>) -> Readonly;
         #[wasm_bindgen(method, setter)]
-        pub fn set_payload(this: &WorkflowStepEvent, val: &Readonly);
+        pub fn set_payload<T: ::wasm_bindgen::JsGeneric>(
+            this: &WorkflowStepEvent<T>,
+            val: &Readonly,
+        );
         #[wasm_bindgen(method, getter)]
-        pub fn timestamp(this: &WorkflowStepEvent) -> Date;
+        pub fn timestamp<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowStepEvent<T>) -> Date;
         #[wasm_bindgen(method, setter)]
-        pub fn set_timestamp(this: &WorkflowStepEvent, val: &Date);
+        pub fn set_timestamp<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowStepEvent<T>, val: &Date);
         #[wasm_bindgen(method, getter, js_name = "type")]
-        pub fn type_(this: &WorkflowStepEvent) -> String;
+        pub fn type_<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowStepEvent<T>) -> String;
         #[wasm_bindgen(method, setter)]
-        pub fn set_type(this: &WorkflowStepEvent, val: &str);
+        pub fn set_type<T: ::wasm_bindgen::JsGeneric>(this: &WorkflowStepEvent<T>, val: &str);
     }
-    impl WorkflowStepEvent {
-        pub fn new(payload: &Readonly, timestamp: &Date, r#type: &str) -> WorkflowStepEvent {
-            let inner: WorkflowStepEvent = JsCast::unchecked_into(js_sys::Object::new());
+    impl<T: ::wasm_bindgen::JsGeneric> WorkflowStepEvent<T> {
+        pub fn new(payload: &Readonly, timestamp: &Date, r#type: &str) -> WorkflowStepEvent<T> {
+            let inner: WorkflowStepEvent<T> = JsCast::unchecked_into(js_sys::Object::new());
             inner.set_payload(payload);
             inner.set_timestamp(timestamp);
             inner.set_type(r#type);
@@ -36186,7 +36645,7 @@ pub mod cloudflare_workers_module {
             this: &WorkflowStep,
             name: &str,
             options: &WorkflowStepOptions,
-        ) -> Result<WorkflowStepEvent, JsValue>;
+        ) -> Result<WorkflowStepEvent<T>, JsValue>;
     }
     #[wasm_bindgen]
     extern "C" {
@@ -38516,8 +38975,46 @@ impl ImageConversionOptionsBuilder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type EmbeddedImageConversionOptions = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = ImageConversionOptions , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type EmbeddedImageConversionOptions;
+    #[wasm_bindgen(method, getter)]
+    pub fn convert(this: &EmbeddedImageConversionOptions) -> Option<bool>;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_convert(this: &EmbeddedImageConversionOptions, val: bool);
+    #[wasm_bindgen(method, getter, js_name = "maxConvertedImages")]
+    pub fn max_converted_images(this: &EmbeddedImageConversionOptions) -> Option<f64>;
+    #[wasm_bindgen(method, setter, js_name = "maxConvertedImages")]
+    pub fn set_max_converted_images(this: &EmbeddedImageConversionOptions, val: f64);
+}
+impl EmbeddedImageConversionOptions {
+    pub fn new() -> EmbeddedImageConversionOptions {
+        Self::builder().build()
+    }
+    pub fn builder() -> EmbeddedImageConversionOptionsBuilder {
+        EmbeddedImageConversionOptionsBuilder {
+            inner: JsCast::unchecked_into(js_sys::Object::new()),
+        }
+    }
+}
+pub struct EmbeddedImageConversionOptionsBuilder {
+    inner: EmbeddedImageConversionOptions,
+}
+impl EmbeddedImageConversionOptionsBuilder {
+    pub fn convert(self, val: bool) -> Self {
+        self.inner.set_convert(val);
+        self
+    }
+    pub fn max_converted_images(self, val: f64) -> Self {
+        self.inner.set_max_converted_images(val);
+        self
+    }
+    pub fn build(self) -> EmbeddedImageConversionOptions {
+        self.inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -39761,24 +40258,41 @@ impl VectorizeVectorBuilder {
         self.inner
     }
 }
-#[allow(dead_code)]
-pub type VectorizeMatch = JsValue;
+#[wasm_bindgen]
+extern "C" {
+    # [wasm_bindgen (extends = VectorizeVector , extends = Object)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub type VectorizeMatch;
+    #[doc = " The score or rank for similarity, when returned as a result"]
+    #[wasm_bindgen(method, getter)]
+    pub fn score(this: &VectorizeMatch) -> f64;
+    #[wasm_bindgen(method, setter)]
+    pub fn set_score(this: &VectorizeMatch, val: f64);
+}
+impl VectorizeMatch {
+    #[doc = " * `score` - The score or rank for similarity, when returned as a result"]
+    pub fn new(score: f64) -> VectorizeMatch {
+        let inner: VectorizeMatch = JsCast::unchecked_into(js_sys::Object::new());
+        inner.set_score(score);
+        inner
+    }
+}
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type VectorizeMatches;
     #[wasm_bindgen(method, getter)]
-    pub fn matches(this: &VectorizeMatches) -> Vec<JsValue>;
+    pub fn matches(this: &VectorizeMatches) -> Vec<VectorizeMatch>;
     #[wasm_bindgen(method, setter, slice_to_array)]
-    pub fn set_matches(this: &VectorizeMatches, val: &[JsValue]);
+    pub fn set_matches(this: &VectorizeMatches, val: &[VectorizeMatch]);
     #[wasm_bindgen(method, getter)]
     pub fn count(this: &VectorizeMatches) -> f64;
     #[wasm_bindgen(method, setter)]
     pub fn set_count(this: &VectorizeMatches, val: f64);
 }
 impl VectorizeMatches {
-    pub fn new(matches: &[JsValue], count: f64) -> VectorizeMatches {
+    pub fn new(matches: &[VectorizeMatch], count: f64) -> VectorizeMatches {
         let inner: VectorizeMatches = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_matches(matches);
         inner.set_count(count);
@@ -40808,18 +41322,18 @@ pub enum RoleKind {
     Assistant = "assistant",
     System = "system",
     Tool = "tool",
-    JsValue(JsValue),
+    String(String),
 }
 #[wasm_bindgen(private)]
 pub enum AiTextGenerationToolInputTypeKind {
     Function = "function",
-    JsValue(JsValue),
+    String(String),
 }
 #[wasm_bindgen(private)]
 pub enum ToolsKind {
     VecOfAiTextGenerationToolInput(Vec<AiTextGenerationToolInput>),
     VecOfAiTextGenerationToolLegacyInput(Vec<AiTextGenerationToolLegacyInput>),
-    JsValue(JsValue),
+    Object(Object),
 }
 #[wasm_bindgen(private)]
 pub enum ConversationKind {
@@ -40940,7 +41454,7 @@ pub enum PoolingKind {
 #[wasm_bindgen(private)]
 pub enum ImageKind {
     VecOfF64(Vec<f64>),
-    JsValue(JsValue),
+    String(String),
 }
 #[wasm_bindgen(private)]
 pub enum Ai_Cf_Meta_Llama_3_3_70B_Instruct_Fp8_Fast_JSON_ModeTypeKind {
