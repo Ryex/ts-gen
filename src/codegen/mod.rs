@@ -290,12 +290,36 @@ fn generate_tokens(
         }
     };
 
+    // What reaches the output, by id, including namespace members. The
+    // filtered declarations outlive the tree, which borrows them.
+    let mut surfaces: HashMap<crate::context::TypeId, std::borrow::Cow<'_, TypeDeclaration>> =
+        HashMap::new();
+    fn collect_surfaces<'d>(
+        type_id: crate::context::TypeId,
+        gctx: &'d crate::context::GlobalContext,
+        surfaces: &mut HashMap<crate::context::TypeId, std::borrow::Cow<'d, TypeDeclaration>>,
+    ) {
+        let decl = gctx.get_type(type_id);
+        let Some(surface) = module_surface(decl, gctx) else {
+            return;
+        };
+        if let TypeKind::Namespace(ns) = &decl.kind {
+            for &member in &ns.declarations {
+                collect_surfaces(member, gctx, surfaces);
+            }
+        }
+        surfaces.insert(type_id, surface);
+    }
+    for &type_id in &module.types {
+        if should_emit(gctx.get_type(type_id)) {
+            collect_surfaces(type_id, gctx, &mut surfaces);
+        }
+    }
     let mut root = ModTree::default();
     for &type_id in &module.types {
-        let decl = gctx.get_type(type_id);
-        if should_emit(decl) {
+        if let Some(decl) = surfaces.get(&type_id) {
             root.at(&cgctx.module_path(&decl.module_context))
-                .insert(decl, Vec::new(), gctx);
+                .insert(decl, Vec::new(), &surfaces);
         }
     }
     let global_items = root.generate(&mut Vec::new(), &cgctx);
@@ -314,6 +338,46 @@ fn generate_tokens(
         #external_uses
         #(#global_items)*
         #dynamic_unions
+    }
+}
+
+/// The part of a module declaration that reaches JS. A value its block
+/// does not export has no import to bind to: `import { helper } from "m"`
+/// fails at link time when `m` has no such export, so an unexported
+/// function, variable or namespace is dropped, and an unexported class
+/// keeps only its instance members, which bind through a value rather
+/// than by importing the class. Types are unaffected, as nothing imports
+/// them.
+fn module_surface<'d>(
+    decl: &'d TypeDeclaration,
+    gctx: &crate::context::GlobalContext,
+) -> Option<std::borrow::Cow<'d, TypeDeclaration>> {
+    use std::borrow::Cow;
+    if !matches!(decl.module_context, crate::ir::ModuleContext::Module(_)) {
+        return Some(Cow::Borrowed(decl));
+    }
+    let exported = |name: &str| gctx.exports.is_exported(decl.scope_id, name);
+    match &decl.kind {
+        TypeKind::Function(f) if !exported(&f.js_name) => None,
+        TypeKind::Variable(v) if !exported(&v.js_name) => None,
+        TypeKind::Namespace(ns) if !exported(&ns.name) => None,
+        TypeKind::Class(c) if !exported(&c.name) && !exported(&c.js_name) => {
+            let mut c = c.clone();
+            c.members.retain(|m| {
+                !matches!(
+                    m,
+                    crate::ir::Member::Constructor(_)
+                        | crate::ir::Member::StaticGetter(_)
+                        | crate::ir::Member::StaticSetter(_)
+                        | crate::ir::Member::StaticMethod(_)
+                )
+            });
+            Some(Cow::Owned(TypeDeclaration {
+                kind: TypeKind::Class(c),
+                ..decl.clone()
+            }))
+        }
+        _ => Some(Cow::Borrowed(decl)),
     }
 }
 
@@ -683,19 +747,20 @@ impl<'d> ModTree<'d> {
     }
 
     /// Add `decl`, whose enclosing namespaces have the JS path
-    /// `js_namespace`. A namespace becomes a child holding its members.
+    /// `js_namespace`. A namespace becomes a child holding those of its
+    /// members that are in `surfaces`.
     fn insert(
         &mut self,
         decl: &'d TypeDeclaration,
         mut js_namespace: Vec<String>,
-        gctx: &'d crate::context::GlobalContext,
+        surfaces: &'d HashMap<crate::context::TypeId, std::borrow::Cow<'d, TypeDeclaration>>,
     ) {
         match &decl.kind {
             TypeKind::Namespace(ns) => {
                 let child = self.child(&crate::util::naming::to_snake_case(&ns.name));
                 js_namespace.push(ns.name.clone());
-                for &id in &ns.declarations {
-                    child.insert(gctx.get_type(id), js_namespace.clone(), gctx);
+                for member in ns.declarations.iter().filter_map(|id| surfaces.get(id)) {
+                    child.insert(member, js_namespace.clone(), surfaces);
                 }
             }
             _ => self.entries.push(ModEntry::Item(decl, js_namespace)),

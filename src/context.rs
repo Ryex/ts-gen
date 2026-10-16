@@ -64,10 +64,68 @@ pub struct GlobalContext {
     /// Body scopes of every `declare module "x"`, by specifier, one per
     /// declaring file.
     pub ambient_module_scopes: std::collections::HashMap<String, Vec<ScopeId>>,
+    /// What each module scope exports, by public name.
+    pub exports: ModuleExports,
     types: Vec<TypeDeclaration>,
     modules: Vec<ParsedModule>,
     /// Map from module specifier to ModuleId for fast lookup.
     module_index: std::collections::HashMap<String, ModuleId>,
+}
+
+/// The export map of every declaration block scope: a module file, a
+/// `declare module "x"` body or a namespace body. Like ECMA-262's
+/// ResolveExport over a fully known graph, it is built up front, so an
+/// import is a lookup by public name and a value is emitted only when its
+/// block exports it. TypeScript's reading of the `.d.ts` defines the
+/// surface: a block exports every declaration unless it decides its
+/// exports explicitly (see `parse::first_pass::block_exports_explicitly`).
+///
+/// Each entry maps a public name to the local name it is bound to in the
+/// scope; the two differ for `export { local as public }`.
+#[derive(Clone, Debug, Default)]
+pub struct ModuleExports {
+    by_scope: std::collections::HashMap<ScopeId, indexmap::IndexMap<String, String>>,
+}
+
+impl ModuleExports {
+    /// Record that `scope` exports its binding `local` as `public`.
+    pub fn insert(&mut self, scope: ScopeId, public: impl Into<String>, local: impl Into<String>) {
+        self.by_scope
+            .entry(scope)
+            .or_default()
+            .insert(public.into(), local.into());
+    }
+
+    /// Forget everything recorded for `scope`. A script file's globals
+    /// are declarations, not a module's exports.
+    pub fn clear(&mut self, scope: ScopeId) {
+        self.by_scope.remove(&scope);
+    }
+
+    /// Re-export everything `from` exports as exports of `scope`, under the
+    /// same public and local names. For `export = X`, the members of the
+    /// namespace merged with `X` are the module's named exports, and phase
+    /// 2 binds them in the module scope as well as in `X`'s.
+    pub fn extend_from(&mut self, scope: ScopeId, from: ScopeId) {
+        let Some(entries) = self.by_scope.get(&from).cloned() else {
+            return;
+        };
+        self.by_scope.entry(scope).or_default().extend(entries);
+    }
+
+    /// The local name `scope` binds its export `public` to.
+    pub fn local_name(&self, scope: ScopeId, public: &str) -> Option<&str> {
+        self.by_scope.get(&scope)?.get(public).map(String::as_str)
+    }
+
+    /// Whether `scope` exports its binding `local` under any name. A
+    /// renamed constructor variable's class takes its public name as its
+    /// Rust name, so a public name counts as well.
+    pub fn is_exported(&self, scope: ScopeId, local: &str) -> bool {
+        self.by_scope
+            .get(&scope)
+            .is_some_and(|m| m.contains_key(local) || m.values().any(|l| l == local))
+    }
 }
 
 impl GlobalContext {
@@ -79,6 +137,7 @@ impl GlobalContext {
             pending_imports: Vec::new(),
             builtin_type_ids: std::collections::HashSet::new(),
             ambient_module_scopes: std::collections::HashMap::new(),
+            exports: ModuleExports::default(),
             types: Vec::new(),
             modules: Vec::new(),
             module_index: std::collections::HashMap::new(),
@@ -169,8 +228,19 @@ impl GlobalContext {
         };
         let mut namespaces = namespaces.split('.');
         let first = self.scopes.resolve_namespace(scope, namespaces.next()?)?;
-        let members = namespaces.try_fold(first, |ns, name| self.scopes.get(ns).namespace(name))?;
-        self.scopes.get(members).get(member)
+        let members = namespaces.try_fold(first, |ns, name| {
+            self.scopes.get(ns).namespace(self.member_name(ns, name)?)
+        })?;
+        self.scopes
+            .get(members)
+            .get(self.member_name(members, member)?)
+    }
+
+    /// The local name a member `public` of the block scope `ns` is bound
+    /// to: `A.Foo` through `import * as A`, or `NS.Foo`, names the export
+    /// `Foo` of that block.
+    fn member_name<'n>(&'n self, ns: ScopeId, public: &'n str) -> Option<&'n str> {
+        self.exports.local_name(ns, public)
     }
 
     /// Iterate all types in the arena.

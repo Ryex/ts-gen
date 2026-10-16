@@ -1904,6 +1904,27 @@ or `declare var _Foo` is still exported by name through
 and either way it merges and resolves with them rather than being a
 global the output never emits.
 
+### The export map
+
+Each block (file, `declare module` body, namespace body) exports every
+declaration unless it contains `export { … }`, `export … from`,
+`export *`, `export =` or `export default <expr>`; then only what those
+and `export` modifiers name. `export default class C {}` is a modifier.
+`export = X` adds the exports of the namespace merged with `X` as named
+exports. Per block, not per merged scope:
+
+```ts
+namespace test { export { test }; }        // exports: test
+namespace test { function after(): void; } // exports: after
+```
+
+Imports look up public names and bind the local: `export { _Foo as
+Foo }` makes `import { Foo }`, `D.Foo` and `extends Foo` all reach
+`_Foo`, and the Rust reference is `_Foo`.
+
+Unexported functions, variables and namespaces are not emitted; an
+unexported class keeps only its instance members. Types are unaffected.
+
 Qualification keys off the *resolved* declaration's `module_context`,
 not the textual name, so a global `interface Foo` and a module-scoped
 `class Foo` resolve independently — scope-chain resolution at the use

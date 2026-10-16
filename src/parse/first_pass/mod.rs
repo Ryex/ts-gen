@@ -54,6 +54,111 @@ pub fn file_context(program: &ast::Program<'_>, lib_name: Option<&str>) -> ir::M
 
 // ─── Shared Helpers ─────────────────────────────────────────────────
 
+/// Whether a declaration block decides its exports explicitly. TypeScript
+/// exports every declaration of a `.d.ts` file, `declare module` body or
+/// namespace body implicitly, unless the block contains an export
+/// declaration (`export { … }`, `export … from`, `export *`) or an export
+/// assignment (`export =`, `export default <expr>`); `export` modifiers on
+/// declarations do not switch implicit export off, and nor does `export
+/// default class C {}`, which is a declaration with modifiers. The rule is
+/// per block, so a second `namespace test { function after(); }` next to a
+/// `namespace test { export { test }; }` still exports `after`.
+pub fn block_exports_explicitly(stmts: &[ast::Statement<'_>]) -> bool {
+    stmts.iter().any(|stmt| match stmt {
+        ast::Statement::ExportNamedDeclaration(_)
+        | ast::Statement::ExportFromDeclaration(_)
+        | ast::Statement::ExportAllDeclaration(_)
+        | ast::Statement::TSExportAssignment(_) => true,
+        ast::Statement::ExportDefaultDeclaration(export) => !matches!(
+            export.declaration,
+            ast::ExportDefaultDeclarationKind::ClassDeclaration(_)
+                | ast::ExportDefaultDeclarationKind::FunctionDeclaration(_)
+                | ast::ExportDefaultDeclarationKind::TSInterfaceDeclaration(_)
+        ),
+        _ => false,
+    })
+}
+
+/// The binding a block's `export = <name>` assigns, if any.
+pub fn export_assigned_name<'s>(stmts: &'s [ast::Statement<'_>]) -> Option<&'s str> {
+    stmts.iter().find_map(|stmt| match stmt {
+        ast::Statement::TSExportAssignment(assign) => match &assign.expression {
+            ast::Expression::Identifier(ident) => Some(ident.name.as_str()),
+            _ => None,
+        },
+        _ => None,
+    })
+}
+
+/// The names a block's own declarations bind, with or without an `export`
+/// modifier. Imports and nested `declare module` / `declare global` blocks
+/// bind nothing here.
+pub fn block_declared_names(stmts: &[ast::Statement<'_>]) -> Vec<String> {
+    let mut names = Vec::new();
+    for stmt in stmts {
+        let decl = match stmt {
+            ast::Statement::ExportDeclaration(export) => Some(&export.declaration),
+            _ => None,
+        };
+        match decl {
+            Some(decl) => declaration_names(decl, &mut names),
+            None => statement_names(stmt, &mut names),
+        }
+    }
+    names
+}
+
+fn statement_names(stmt: &ast::Statement<'_>, names: &mut Vec<String>) {
+    match stmt {
+        ast::Statement::ExportDefaultDeclaration(export) => match &export.declaration {
+            ast::ExportDefaultDeclarationKind::ClassDeclaration(c) => {
+                names.extend(c.id.as_ref().map(|id| id.name.to_string()))
+            }
+            ast::ExportDefaultDeclarationKind::FunctionDeclaration(f) => {
+                names.extend(f.id.as_ref().map(|id| id.name.to_string()))
+            }
+            _ => {}
+        },
+        ast::Statement::ClassDeclaration(c) => {
+            names.extend(c.id.as_ref().map(|id| id.name.to_string()))
+        }
+        ast::Statement::FunctionDeclaration(f) => {
+            names.extend(f.id.as_ref().map(|id| id.name.to_string()))
+        }
+        ast::Statement::TSInterfaceDeclaration(i) => names.push(i.id.name.to_string()),
+        ast::Statement::TSTypeAliasDeclaration(a) => names.push(a.id.name.to_string()),
+        ast::Statement::TSEnumDeclaration(e) => names.push(e.id.name.to_string()),
+        ast::Statement::TSNamespaceDeclaration(ns) => names.push(ns.id.name.to_string()),
+        ast::Statement::VariableDeclaration(v) => names.extend(
+            v.declarations
+                .iter()
+                .filter_map(crate::parse::merge::var_declarator_name),
+        ),
+        _ => {}
+    }
+}
+
+fn declaration_names(decl: &ast::Declaration<'_>, names: &mut Vec<String>) {
+    match decl {
+        ast::Declaration::ClassDeclaration(c) => {
+            names.extend(c.id.as_ref().map(|id| id.name.to_string()))
+        }
+        ast::Declaration::FunctionDeclaration(f) => {
+            names.extend(f.id.as_ref().map(|id| id.name.to_string()))
+        }
+        ast::Declaration::TSInterfaceDeclaration(i) => names.push(i.id.name.to_string()),
+        ast::Declaration::TSTypeAliasDeclaration(a) => names.push(a.id.name.to_string()),
+        ast::Declaration::TSEnumDeclaration(e) => names.push(e.id.name.to_string()),
+        ast::Declaration::TSNamespaceDeclaration(ns) => names.push(ns.id.name.to_string()),
+        ast::Declaration::VariableDeclaration(v) => names.extend(
+            v.declarations
+                .iter()
+                .filter_map(crate::parse::merge::var_declarator_name),
+        ),
+        _ => {}
+    }
+}
+
 /// Statements of `namespace N { ... }`. Dotted `namespace A.B {}` bodies
 /// are not descended into.
 fn namespace_block_statements<'s, 'a>(
@@ -172,6 +277,9 @@ fn register_type(
         scope_id: scope,
         exported,
     });
+    if exported {
+        gctx.exports.insert(scope, name, name);
+    }
     gctx.scopes.insert(scope, name_str, type_id);
 }
 

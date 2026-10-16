@@ -346,7 +346,12 @@ fn bind_import(
             .insert_namespace(import.scope, import.local_name.clone(), target);
         return true;
     }
-    let name = &import.original_name;
+    // An import names an export, which the module's export map binds to a
+    // local name; they differ for `export { local as public }`.
+    let Some(name) = gctx.exports.local_name(target, &import.original_name) else {
+        return false;
+    };
+    let name = &name.to_string();
     let (type_id, members) = if own_only {
         let scope = gctx.scopes.get(target);
         (scope.get(name), scope.namespace(name))
@@ -1151,6 +1156,93 @@ mod tests {
             assert!(declared.is_some());
             assert_eq!(gctx.scopes.resolve(user_scope, name), declared);
         }
+    }
+
+    #[test]
+    fn export_map_binds_imports_to_the_exported_local() {
+        let dir = std::env::temp_dir().join(format!("ts-gen-export-map-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let decls = dir.join("decls.d.ts");
+        std::fs::write(
+            &decls,
+            r#"
+                declare module "dep" {
+                    class _Foo { bar(): void; }
+                    export { _Foo as Foo };
+                    export default class Def {}
+                    function hidden(): void;
+                }
+                declare module "bare" {
+                    class Open {}
+                    export function also(): void;
+                    function too(): void;
+                }
+                declare module "blocks" {
+                    namespace ns { const v: number; export { v as w }; }
+                    namespace ns { function after(): void; }
+                }
+                declare module "assigned" {
+                    class S { s(): void; }
+                    namespace S { class R { r(): void; } }
+                    export = S;
+                }
+                declare module "defaulted" {
+                    export default class Def {}
+                    function helper(): void;
+                }
+                declare module "main" {
+                    import { Foo } from "dep";
+                    import Def from "dep";
+                    import * as D from "dep";
+                    import { Open, too } from "bare";
+                    import { ns } from "blocks";
+                    import { R } from "assigned";
+                    import * as A from "assigned";
+                    import { helper } from "defaulted";
+                }
+            "#,
+        )
+        .unwrap();
+        let result = parse_dts_files(&[&decls], None);
+        std::fs::remove_dir_all(&dir).unwrap();
+        let (_, gctx) = result.unwrap();
+
+        let dep = gctx.ambient_module_scopes["dep"][0];
+        let bare = gctx.ambient_module_scopes["bare"][0];
+        let main = gctx.ambient_module_scopes["main"][0];
+        // `export { … }` / `export default` decide the block's exports.
+        assert_eq!(gctx.exports.local_name(dep, "Foo"), Some("_Foo"));
+        assert_eq!(gctx.exports.local_name(dep, "default"), Some("Def"));
+        assert_eq!(gctx.exports.local_name(dep, "Def"), None);
+        assert!(gctx.exports.is_exported(dep, "_Foo"));
+        assert!(!gctx.exports.is_exported(dep, "hidden"));
+        // Without one, every declaration is exported, `export` modifier or not.
+        for name in ["Open", "also", "too"] {
+            assert!(gctx.exports.is_exported(bare, name), "{name}");
+        }
+
+        let name_of = |id| {
+            crate::codegen::typemap::type_decl_name(&gctx.get_type(id).kind).map(str::to_string)
+        };
+        let resolve = |path: &str| gctx.resolve_path(main, path).and_then(name_of);
+        assert_eq!(resolve("Foo").as_deref(), Some("_Foo"));
+        assert_eq!(resolve("Def").as_deref(), Some("Def"));
+        assert_eq!(resolve("D.Foo").as_deref(), Some("_Foo"));
+        assert_eq!(resolve("D.default").as_deref(), Some("Def"));
+        assert_eq!(resolve("D._Foo"), None, "a local is not an export");
+        assert_eq!(resolve("Open").as_deref(), Some("Open"));
+        assert_eq!(resolve("too").as_deref(), Some("too"));
+        // The rule is per block: the second `namespace ns` exports `after`
+        // although the first decides its exports explicitly.
+        assert_eq!(resolve("ns.w").as_deref(), Some("v"));
+        assert_eq!(resolve("ns.after").as_deref(), Some("after"));
+        assert_eq!(resolve("ns.v"), None);
+        // `export = S` makes the namespace merged with `S` the module.
+        assert_eq!(resolve("R").as_deref(), Some("R"));
+        assert_eq!(resolve("A.R").as_deref(), Some("R"));
+        assert_eq!(resolve("A.default").as_deref(), Some("S"));
+        // `export default class` is a declaration, not an export assignment.
+        assert_eq!(resolve("helper").as_deref(), Some("helper"));
     }
 
     #[test]
