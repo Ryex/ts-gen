@@ -49,7 +49,7 @@ in sync with the snapshot fixtures (`tests/fixtures/*.d.ts` paired with
 | `string`                        | `String` / `&str`          |
 | `number`                        | `f64`                      |
 | `boolean`                       | `bool`                     |
-| `bigint`                        | `i64`                      |
+| `bigint`                        | `BigInt`                   |
 | `symbol` / `unique symbol`      | `Symbol`                   |
 | `void`                          | `()` (or omitted from sig) |
 | `undefined`                     | `Undefined`                |
@@ -95,22 +95,27 @@ sequences:
   JS `Array`.
 * **Return position** → `Vec<T>`.
 
-Element type lowering inside the slice / `Vec<T>` follows
-**return-position** rules regardless of the outer direction:
+wasm-bindgen only has slice / `Vec` ABIs for Rust-native `String` and
+`f64` elements and for JS handles. So an element that resolves, through
+aliases and unions, to a string or number keeps its return-position
+form; every other element takes its inner-position handle form:
 
-| TypeScript element        | Slice / Vec element    |
-| ------------------------- | ---------------------- |
-| `number`                  | `f64`                  |
-| `bigint`                  | `i64`                  |
-| `boolean`                 | `bool`                 |
-| `string`                  | `String`               |
-| `Foo` (named JS / Rust type) | `Foo`               |
-| `any` / `unknown`         | `JsValue`              |
+| TypeScript element           | Slice / Vec element    |
+| ---------------------------- | ---------------------- |
+| `number`, `1 \| 2`           | `f64`                  |
+| `string`, `"a" \| "b"`       | `String`               |
+| `Foo` (named JS / Rust type) | `Foo`                  |
+| `any` / `unknown`            | `JsValue`              |
+| `boolean`                    | `Boolean`              |
+| `T \| null`                  | `JsOption<U>`          |
+| `T[]`                        | `Array<U>`             |
 
 Strings stay owned (`Vec<String>`, not `Vec<&str>`); JS-imported
 classes stay unborrowed (`&[EmailAttachment]`, not
-`&[&EmailAttachment]`); primitives stay bare (`&[f64]`, not
-`&[Number]`).
+`&[&EmailAttachment]`); numbers stay bare (`&[f64]`, not
+`&[Number]`). With `type Row = string[]`, `Row[]` is
+`&[Array<JsString>]` / `Vec<Array<JsString>>`, the same as
+`string[][]`.
 
 Inside an actual generic (`Promise<Array<T>>`, `Map<K, Array<V>>`,
 …) the legacy `Array<T'>` form is preserved — `Promise<T>` /
