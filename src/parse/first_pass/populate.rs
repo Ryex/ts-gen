@@ -128,14 +128,9 @@ pub fn populate_declarations<'a, 'docs>(
         namespace_members: NamespaceMembers::new(),
     };
 
+    let file_ctx = super::file_context(program, lib_name);
     for stmt in &program.body {
-        pcx.populate_statement(
-            stmt,
-            &ir::ModuleContext::Global,
-            &mut declarations,
-            scope,
-            false,
-        );
+        pcx.populate_statement(stmt, &file_ctx, &mut declarations, scope, false);
     }
 
     (declarations, pcx.namespace_members)
@@ -263,12 +258,14 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
                         continue;
                     }
                     // Functions and variables are emitted under each public name
-                    // directly, so an alias stub would only shadow them.
+                    // directly, so an alias stub would only shadow them. The
+                    // registry kind, not the phase-1 placeholder, reflects a var
+                    // later merged with its instance interface.
                     if self.export_names(scope, &local).contains(&exported_name)
-                        && self.scopes.get(scope).get(&local).is_some_and(|type_id| {
+                        && self.registry.types.get(&local).is_some_and(|info| {
                             matches!(
-                                self.type_arena[type_id.index()].kind,
-                                ir::TypeKind::Function(_) | ir::TypeKind::Variable(_)
+                                info.kind,
+                                ir::RegisteredKind::Function | ir::RegisteredKind::Variable
                             )
                         })
                     {
@@ -597,12 +594,26 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
         }
         members.extend(static_members);
 
-        // The variable is a value, not a type, so nothing refers
-        // to the class by its local name: the class takes its
-        // first public name and further ones alias it.
+        // With an instance interface, the local name is the Rust type: the
+        // interface's members refer to it and `merge_class_pairs` pairs the
+        // two by it. The class binds to its first public name, and the
+        // `export { _X as X }` stubs alias it, as for a renamed class. A
+        // var alone is a value nothing refers to by its local name, so the
+        // class takes its first public name and further ones alias it.
         let public_names = self.export_names(dcx.scope, name);
-        let mut public_names = public_names.iter();
-        let class_name = public_names.next().map_or(name, String::as_str).to_string();
+        let has_instance_interface = self
+            .registry
+            .types
+            .get(name)
+            .is_some_and(|info| info.kind == ir::RegisteredKind::MergedClassLike)
+            || self.registry.ctor_interfaces.contains_key(name);
+        let (class_name, js_name, aliases) = match public_names.split_first() {
+            Some((public, _)) if has_instance_interface => {
+                (name.to_string(), public.clone(), &[][..])
+            }
+            Some((public, rest)) => (public.clone(), public.clone(), rest),
+            None => (name.to_string(), name.to_string(), &[][..]),
+        };
 
         // Var-promoted classes have no surface
         // type parameters; body scope = enclosing.
@@ -610,7 +621,7 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
         declarations.push(dcx.decl(
             ir::TypeKind::Class(ir::ClassDecl {
                 name: class_name.clone(),
-                js_name: class_name.clone(),
+                js_name,
                 type_params: vec![],
                 extends: None,
                 implements: vec![],
@@ -621,7 +632,7 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
             }),
             doc,
         ));
-        for alias in public_names {
+        for alias in aliases {
             declarations.push(dcx.decl(
                 ir::TypeKind::TypeAlias(ir::TypeAliasDecl {
                     name: alias.clone(),
