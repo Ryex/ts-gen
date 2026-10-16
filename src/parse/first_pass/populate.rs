@@ -47,6 +47,9 @@ struct PopulateCtx<'a, 'docs> {
     docs: &'a DocComments<'docs>,
     file_scope: ScopeId,
     namespace_members: NamespaceMembers,
+    /// The ambient module scope being populated and the name its
+    /// `export =` assigns, if any.
+    export_assignment: Option<(ScopeId, String)>,
 }
 
 /// Populated members of each global namespace, keyed by its member scope.
@@ -126,14 +129,29 @@ pub fn populate_declarations<'a, 'docs>(
         docs,
         file_scope: scope,
         namespace_members: NamespaceMembers::new(),
+        export_assignment: None,
     };
 
     let file_ctx = super::file_context(program, lib_name);
+    if let ir::ModuleContext::Module(_) = file_ctx {
+        pcx.export_assignment = assigned_name(&program.body).map(|name| (scope, name));
+    }
     for stmt in &program.body {
         pcx.populate_statement(stmt, &file_ctx, &mut declarations, scope, false);
     }
 
     (declarations, pcx.namespace_members)
+}
+
+/// The binding a module body's `export = <name>` assigns.
+fn assigned_name(body: &[ast::Statement<'_>]) -> Option<String> {
+    body.iter().find_map(|stmt| match stmt {
+        ast::Statement::TSExportAssignment(assign) => match &assign.expression {
+            ast::Expression::Identifier(ident) => Some(ident.name.to_string()),
+            _ => None,
+        },
+        _ => None,
+    })
 }
 
 /// `(rust_name, js_name)` for each name a value binding is imported by: its
@@ -144,8 +162,18 @@ fn value_bindings(local: &str, public_names: &[String]) -> Vec<(String, String)>
     }
     public_names
         .iter()
-        .map(|public| (to_snake_case(public), public.clone()))
+        .map(|public| (to_snake_case(rust_name(local, public)), public.clone()))
         .collect()
+}
+
+/// The Rust name of the binding `local` exported as `public`. A default
+/// export has no name of its own, so it keeps the local one.
+fn rust_name<'n>(local: &'n str, public: &'n str) -> &'n str {
+    if public == "default" {
+        local
+    } else {
+        public
+    }
 }
 
 /// Per-declaration context passed to `populate_declaration`.
@@ -226,10 +254,11 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
 
             // ModuleDeclaration variants
             ast::Statement::ExportDeclaration(export) => {
-                let export_ctx = if let Some(lib) = self.lib_name {
-                    ir::ModuleContext::Module(lib.into())
-                } else {
-                    ctx.clone()
+                // `--lib-name` names the file's own module; an export inside
+                // a `declare module` body belongs to that module.
+                let export_ctx = match (ctx, self.lib_name) {
+                    (ir::ModuleContext::Global, Some(lib)) => ir::ModuleContext::Module(lib.into()),
+                    _ => ctx.clone(),
                 };
                 self.populate_oxc_declaration(
                     &export.declaration,
@@ -323,9 +352,22 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
                 }
             },
 
-            ast::Statement::TSExportAssignment(_) => {
-                self.diag
-                    .info("Skipping `export =` (namespace contents already emitted)");
+            // The assigned binding is bound as the default export, and an
+            // assigned namespace is emitted flat by `populate_namespace`.
+            ast::Statement::TSExportAssignment(assign) => {
+                let declared = match &assign.expression {
+                    ast::Expression::Identifier(ident) => {
+                        matches!(ctx, ir::ModuleContext::Module(_))
+                            && self.scopes.get(scope).get(&ident.name).is_some()
+                    }
+                    _ => false,
+                };
+                if !declared {
+                    self.diag.info(
+                        "Skipping `export =` (only a binding declared in the same \
+                         module is supported)",
+                    );
+                }
             }
             ast::Statement::TSNamespaceExportDeclaration(decl) => {
                 self.diag.info(format!(
@@ -611,7 +653,7 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
             Some((public, _)) if has_instance_interface => {
                 (name.to_string(), public.clone(), &[][..])
             }
-            Some((public, rest)) => (public.clone(), public.clone(), rest),
+            Some((public, rest)) => (rust_name(name, public).to_string(), public.clone(), rest),
             None => (name.to_string(), name.to_string(), &[][..]),
         };
 
@@ -779,9 +821,14 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
             .get(specifier)
             .expect("phase 1 creates a scope for every ambient module");
         if let Some(block) = &module.body {
+            let outer = std::mem::replace(
+                &mut self.export_assignment,
+                assigned_name(&block.body).map(|name| (module_scope, name)),
+            );
             for stmt in &block.body {
                 self.populate_statement(stmt, &module_ctx, declarations, module_scope, false);
             }
+            self.export_assignment = outer;
         }
     }
 
@@ -798,6 +845,19 @@ impl<'a, 'docs> PopulateCtx<'a, 'docs> {
         // Use the namespace's child scope from Phase 1 (fixes Item 10).
         let ns_scope = self.resolve_namespace_scope(&ns_name, scope);
         let stmts = namespace_block_statements(ns);
+
+        // A namespace the module assigns with `export =` is the module
+        // itself, so its members are module exports and are emitted flat.
+        if self
+            .export_assignment
+            .as_ref()
+            .is_some_and(|(module_scope, name)| *module_scope == scope && *name == ns_name)
+        {
+            for stmt in stmts {
+                self.populate_statement(stmt, parent_ctx, declarations, ns_scope, exported);
+            }
+            return;
+        }
 
         // Members keep the parent's module context so their bindings carry
         // `module = "…"` as well as the namespace path.
