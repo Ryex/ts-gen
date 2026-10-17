@@ -2348,6 +2348,45 @@ through the namespace, in either declaration order.
   }
   pub fn on_event(name: &str, listener: &events::Listener<JsString>);
   ```
+
+  A Rust alias can't declare a type parameter its target doesn't use
+  (E0091), so a parameter the lowered target doesn't mention is dropped
+  from the alias and from every instantiation. This covers a target that
+  never names it as well as one lowering erases:
+
+  ```ts
+  type Branded<T, B> = T & { __brand: B };
+  type Erased<T> = T extends string ? Local : never;
+  type Skip<A, B, C> = Pair<A, C>;
+  declare function skip(value: Skip<string, number, boolean>): Erased<string>;
+  ```
+
+  ```rust
+  pub type Branded<T> = T;
+  pub type Erased = JsValue;
+  pub type Skip<A, C> = Pair<A, C>;
+  pub fn skip(value: &Skip<JsString, Boolean>) -> Erased;
+  ```
+
+  The trailing kept parameters keep their lowered defaults, unless one
+  names a dropped parameter. An instantiation leaves an omitted argument to
+  that default, which resolves where the alias is declared; the use site
+  fills in the others with TS's defaults (`U = T` with `T` dropped). An
+  alias named bare is its target with the defaults substituted:
+
+  ```ts
+  type WithDefault<T, U = string> = Pair<T, U>;
+  type Chained<T, U = T> = Pair<U, U>;
+  type Fetcher<T = undefined, Reserved = never> = Pair<T, T>;
+  declare function defaults(a: WithDefault<number>, b: Chained<number>, c: Fetcher): void;
+  ```
+
+  ```rust
+  pub type WithDefault<T, U = JsString> = Pair<T, U>;
+  pub type Chained<U> = Pair<U, U>;
+  pub type Fetcher<T = Undefined> = Pair<T, T>;
+  pub fn defaults(a: &WithDefault<Number>, b: &Chained<Number>, c: &Pair<Undefined, Undefined>);
+  ```
 * `export { Local as Public };` (sourceless) → names the binding `Local`
   declares in the exporting scope, recorded against its `TypeId` in
   `TypeRegistry::export_names`. Each `declare module "x"` body is its own

@@ -9,10 +9,6 @@ use JsValue as Args;
 #[allow(dead_code)]
 use JsValue as Cf;
 #[allow(dead_code)]
-use JsValue as CfHostMetadata;
-#[allow(dead_code)]
-use JsValue as Data;
-#[allow(dead_code)]
 use JsValue as R;
 #[allow(dead_code)]
 use JsValue as Readonly;
@@ -1044,7 +1040,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn fetch(
         this: &ServiceWorkerGlobalScope,
-        input: &Request<CfHostMetadata, Cf>,
+        input: &Request<JsValue, CfProperties>,
     ) -> Result<Response, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "fetch")]
     pub async fn fetch_with_str(
@@ -1059,7 +1055,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "fetch")]
     pub async fn fetch_with_request_and_init(
         this: &ServiceWorkerGlobalScope,
-        input: &Request<CfHostMetadata, Cf>,
+        input: &Request<JsValue, CfProperties>,
         init: &RequestInit<RequestInitCfProperties>,
     ) -> Result<Response, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "fetch")]
@@ -1338,7 +1334,7 @@ extern "C" {
     #[wasm_bindgen(js_name = "addEventListener")]
     pub fn add_event_listener<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     );
 }
 #[wasm_bindgen]
@@ -1346,7 +1342,7 @@ extern "C" {
     #[wasm_bindgen(catch, js_name = "addEventListener")]
     pub fn try_add_event_listener<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     ) -> Result<(), JsValue>;
 }
 #[wasm_bindgen]
@@ -1356,7 +1352,7 @@ extern "C" {
         Type: ::wasm_bindgen::JsGeneric,
     >(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetAddEventListenerOptions,
     );
 }
@@ -1367,7 +1363,7 @@ extern "C" {
         Type: ::wasm_bindgen::JsGeneric,
     >(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetAddEventListenerOptions,
     ) -> Result<(), JsValue>;
 }
@@ -1376,7 +1372,7 @@ extern "C" {
     #[wasm_bindgen(js_name = "addEventListener")]
     pub fn add_event_listener_with_bool<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     );
 }
@@ -1385,7 +1381,7 @@ extern "C" {
     #[wasm_bindgen(catch, js_name = "addEventListener")]
     pub fn try_add_event_listener_with_bool<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     ) -> Result<(), JsValue>;
 }
@@ -1394,7 +1390,7 @@ extern "C" {
     #[wasm_bindgen(js_name = "removeEventListener")]
     pub fn remove_event_listener<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     );
 }
 #[wasm_bindgen]
@@ -1402,7 +1398,7 @@ extern "C" {
     #[wasm_bindgen(catch, js_name = "removeEventListener")]
     pub fn try_remove_event_listener<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     ) -> Result<(), JsValue>;
 }
 #[wasm_bindgen]
@@ -1412,7 +1408,7 @@ extern "C" {
         Type: ::wasm_bindgen::JsGeneric,
     >(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetEventListenerOptions,
     );
 }
@@ -1423,7 +1419,7 @@ extern "C" {
         Type: ::wasm_bindgen::JsGeneric,
     >(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetEventListenerOptions,
     ) -> Result<(), JsValue>;
 }
@@ -1432,7 +1428,7 @@ extern "C" {
     #[wasm_bindgen(js_name = "removeEventListener")]
     pub fn remove_event_listener_with_bool<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     );
 }
@@ -1441,7 +1437,7 @@ extern "C" {
     #[wasm_bindgen(catch, js_name = "removeEventListener")]
     pub fn try_remove_event_listener_with_bool<Type: ::wasm_bindgen::JsGeneric>(
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     ) -> Result<(), JsValue>;
 }
@@ -1616,7 +1612,7 @@ extern "C" {
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(catch)]
-    pub async fn fetch(input: &Request<CfHostMetadata, Cf>) -> Result<Response, JsValue>;
+    pub async fn fetch(input: &Request<JsValue, CfProperties>) -> Result<Response, JsValue>;
 }
 #[wasm_bindgen]
 extern "C" {
@@ -1632,7 +1628,7 @@ extern "C" {
 extern "C" {
     #[wasm_bindgen(catch, js_name = "fetch")]
     pub async fn fetch_with_request_and_init(
-        input: &Request<CfHostMetadata, Cf>,
+        input: &Request<JsValue, CfProperties>,
         init: &RequestInit<RequestInitCfProperties>,
     ) -> Result<Response, JsValue>;
 }
@@ -1748,32 +1744,33 @@ extern "C" {
     pub fn props<Props: ::wasm_bindgen::JsGeneric>(this: &ExecutionContext<Props>) -> Props;
 }
 #[allow(dead_code)]
-pub type ExportedHandlerFetchHandler<Env, CfHostMetadata, Props> = Function<
-    fn(
-        Request<CfHostMetadata, IncomingRequestCfProperties<CfHostMetadata>>,
-        Env,
-        ExecutionContext<Props>,
-    ) -> JsValue,
->;
+pub type ExportedHandlerFetchHandler<Env = JsValue, CfHostMetadata = JsValue, Props = JsValue> =
+    Function<
+        fn(
+            Request<CfHostMetadata, IncomingRequestCfProperties<CfHostMetadata>>,
+            Env,
+            ExecutionContext<Props>,
+        ) -> JsValue,
+    >;
 #[allow(dead_code)]
-pub type ExportedHandlerTailHandler<Env, Props> =
+pub type ExportedHandlerTailHandler<Env = JsValue, Props = JsValue> =
     Function<fn(Array<TraceItem>, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>>;
 #[allow(dead_code)]
-pub type ExportedHandlerTraceHandler<Env, Props> =
+pub type ExportedHandlerTraceHandler<Env = JsValue, Props = JsValue> =
     Function<fn(Array<TraceItem>, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>>;
 #[allow(dead_code)]
-pub type ExportedHandlerTailStreamHandler<Env, Props> = Function<
+pub type ExportedHandlerTailStreamHandler<Env = JsValue, Props = JsValue> = Function<
     fn(tail_stream::TailEvent<tail_stream::Onset>, Env, ExecutionContext<Props>) -> JsValue,
 >;
 #[allow(dead_code)]
-pub type ExportedHandlerScheduledHandler<Env, Props> =
+pub type ExportedHandlerScheduledHandler<Env = JsValue, Props = JsValue> =
     Function<fn(ScheduledController, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>>;
 #[allow(dead_code)]
-pub type ExportedHandlerQueueHandler<Env, Message, Props> = Function<
+pub type ExportedHandlerQueueHandler<Env = JsValue, Message = JsValue, Props = JsValue> = Function<
     fn(MessageBatch<Message>, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>,
 >;
 #[allow(dead_code)]
-pub type ExportedHandlerTestHandler<Env, Props> =
+pub type ExportedHandlerTestHandler<Env = JsValue, Props = JsValue> =
     Function<fn(TestController, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>>;
 #[wasm_bindgen]
 extern "C" {
@@ -3464,7 +3461,7 @@ impl EventInitBuilder {
     }
 }
 #[allow(dead_code)]
-pub type EventListener<EventType> = Function<fn(EventType) -> Undefined>;
+pub type EventListener<EventType = Event> = Function<fn(EventType) -> Undefined>;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -3482,7 +3479,7 @@ extern "C" {
     ) -> Result<(), JsValue>;
 }
 #[allow(dead_code)]
-pub type EventListenerOrEventListenerObject<EventType> = JsValue;
+pub type EventListenerOrEventListenerObject = JsValue;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -3500,7 +3497,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     );
     #[doc = " The **`addEventListener()`** method of the EventTarget interface sets up a function that will be called whenever the specified event is delivered to the target."]
     #[doc = ""]
@@ -3512,7 +3509,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     ) -> Result<(), JsValue>;
     #[doc = " The **`addEventListener()`** method of the EventTarget interface sets up a function that will be called whenever the specified event is delivered to the target."]
     #[doc = ""]
@@ -3524,7 +3521,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetAddEventListenerOptions,
     );
     #[doc = " The **`addEventListener()`** method of the EventTarget interface sets up a function that will be called whenever the specified event is delivered to the target."]
@@ -3537,7 +3534,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetAddEventListenerOptions,
     ) -> Result<(), JsValue>;
     #[doc = " The **`addEventListener()`** method of the EventTarget interface sets up a function that will be called whenever the specified event is delivered to the target."]
@@ -3550,7 +3547,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     );
     #[doc = " The **`addEventListener()`** method of the EventTarget interface sets up a function that will be called whenever the specified event is delivered to the target."]
@@ -3563,7 +3560,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     ) -> Result<(), JsValue>;
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
@@ -3576,7 +3573,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     );
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
     #[doc = ""]
@@ -3588,7 +3585,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
     ) -> Result<(), JsValue>;
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
     #[doc = ""]
@@ -3600,7 +3597,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetEventListenerOptions,
     );
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
@@ -3613,7 +3610,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: &EventTargetEventListenerOptions,
     ) -> Result<(), JsValue>;
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
@@ -3626,7 +3623,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     );
     #[doc = " The **`removeEventListener()`** method of the EventTarget interface removes an event listener previously registered with EventTarget.addEventListener() from the target."]
@@ -3639,7 +3636,7 @@ extern "C" {
     >(
         this: &EventTarget<EventMap>,
         r#type: &Type,
-        handler: &EventListenerOrEventListenerObject<JsValue>,
+        handler: &EventListenerOrEventListenerObject,
         options: bool,
     ) -> Result<(), JsValue>;
     #[doc = " The **`dispatchEvent()`** method of the EventTarget sends an Event to the object, (synchronously) invoking the affected event listeners in the appropriate order."]
@@ -4221,7 +4218,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn delete(
         this: &Cache,
-        request: &Request<CfHostMetadata, Cf>,
+        request: &Request<JsValue, CfProperties>,
     ) -> Result<Boolean, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_str(this: &Cache, request: &str) -> Result<Boolean, JsValue>;
@@ -4230,7 +4227,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_request_and_options(
         this: &Cache,
-        request: &Request<CfHostMetadata, Cf>,
+        request: &Request<JsValue, CfProperties>,
         options: &CacheQueryOptions,
     ) -> Result<Boolean, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "delete")]
@@ -4248,7 +4245,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "match")]
     pub async fn match_(
         this: &Cache,
-        request: &Request<CfHostMetadata, Cf>,
+        request: &Request<JsValue, CfProperties>,
     ) -> Result<JsOption<Response>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "match")]
     pub async fn match_with_str(this: &Cache, request: &str)
@@ -4259,7 +4256,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "match")]
     pub async fn match_with_request_and_options(
         this: &Cache,
-        request: &Request<CfHostMetadata, Cf>,
+        request: &Request<JsValue, CfProperties>,
         options: &CacheQueryOptions,
     ) -> Result<JsOption<Response>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "match")]
@@ -4277,7 +4274,7 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn put(
         this: &Cache,
-        request: &Request<CfHostMetadata, Cf>,
+        request: &Request<JsValue, CfProperties>,
         response: &Response,
     ) -> Result<Undefined, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "put")]
@@ -7760,19 +7757,19 @@ impl ResponseInitBuilder {
     }
 }
 #[allow(dead_code)]
-pub type RequestInfo<CfHostMetadata, Cf> = JsValue;
+pub type RequestInfo = JsValue;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Body , extends = Object)]
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type Request<CfHostMetadata: ::wasm_bindgen::JsGeneric, Cf: ::wasm_bindgen::JsGeneric>;
     #[wasm_bindgen(constructor, catch)]
-    pub fn new(input: &RequestInfo<JsValue>) -> Result<Request, JsValue>;
+    pub fn new(input: &RequestInfo) -> Result<Request, JsValue>;
     #[wasm_bindgen(constructor, catch, js_name = "Request")]
     pub fn new_with_url(input: &URL) -> Result<Request, JsValue>;
     #[wasm_bindgen(constructor, catch, js_name = "Request")]
     pub fn new_with_request_info_and_init(
-        input: &RequestInfo<JsValue>,
+        input: &RequestInfo,
         init: &RequestInit<Cf>,
     ) -> Result<Request, JsValue>;
     #[wasm_bindgen(constructor, catch, js_name = "Request")]
@@ -8094,9 +8091,9 @@ impl<Cf: ::wasm_bindgen::JsGeneric> RequestInitBuilder<Cf> {
     }
 }
 #[allow(dead_code)]
-pub type Service<T> = JsValue;
+pub type Service = JsValue;
 #[allow(dead_code)]
-pub type Fetcher<T, Reserved> = JsValue;
+pub type Fetcher = JsValue;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -13766,11 +13763,11 @@ impl MessagePortPostMessageOptionsBuilder {
     }
 }
 #[allow(dead_code)]
-pub type LoopbackForExport<T> = JsValue;
+pub type LoopbackForExport = JsValue;
 #[allow(dead_code)]
-pub type LoopbackServiceStub<T> = JsValue;
+pub type LoopbackServiceStub = JsValue;
 #[allow(dead_code)]
-pub type LoopbackDurableObjectClass<T> = JsValue;
+pub type LoopbackDurableObjectClass = JsValue;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -13906,33 +13903,33 @@ extern "C" {
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub type WorkerStub;
     #[wasm_bindgen(method, js_name = "getEntrypoint")]
-    pub fn get_entrypoint<T: ::wasm_bindgen::JsGeneric>(this: &WorkerStub) -> Fetcher<T>;
+    pub fn get_entrypoint<T: ::wasm_bindgen::JsGeneric>(this: &WorkerStub) -> Fetcher;
     #[wasm_bindgen(method, catch, js_name = "getEntrypoint")]
     pub fn try_get_entrypoint<T: ::wasm_bindgen::JsGeneric>(
         this: &WorkerStub,
-    ) -> Result<Fetcher<T>, JsValue>;
+    ) -> Result<Fetcher, JsValue>;
     #[wasm_bindgen(method, js_name = "getEntrypoint")]
     pub fn get_entrypoint_with_name<T: ::wasm_bindgen::JsGeneric>(
         this: &WorkerStub,
         name: &str,
-    ) -> Fetcher<T>;
+    ) -> Fetcher;
     #[wasm_bindgen(method, catch, js_name = "getEntrypoint")]
     pub fn try_get_entrypoint_with_name<T: ::wasm_bindgen::JsGeneric>(
         this: &WorkerStub,
         name: &str,
-    ) -> Result<Fetcher<T>, JsValue>;
+    ) -> Result<Fetcher, JsValue>;
     #[wasm_bindgen(method, js_name = "getEntrypoint")]
     pub fn get_entrypoint_with_name_and_options<T: ::wasm_bindgen::JsGeneric>(
         this: &WorkerStub,
         name: &str,
         options: &WorkerStubEntrypointOptions,
-    ) -> Fetcher<T>;
+    ) -> Fetcher;
     #[wasm_bindgen(method, catch, js_name = "getEntrypoint")]
     pub fn try_get_entrypoint_with_name_and_options<T: ::wasm_bindgen::JsGeneric>(
         this: &WorkerStub,
         name: &str,
         options: &WorkerStubEntrypointOptions,
-    ) -> Result<Fetcher<T>, JsValue>;
+    ) -> Result<Fetcher, JsValue>;
 }
 #[wasm_bindgen]
 extern "C" {
@@ -33018,7 +33015,7 @@ pub enum ContinentCode {
     Sa = "SA",
 }
 #[allow(dead_code)]
-pub type CfProperties<HostMetadata> = JsValue;
+pub type CfProperties = JsValue;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -33924,7 +33921,7 @@ extern "C" {
     pub fn message(this: &EmailEvent) -> ForwardableEmailMessage;
 }
 #[allow(dead_code)]
-pub type EmailExportedHandler<Env, Props> = Function<
+pub type EmailExportedHandler<Env = JsValue, Props = JsValue> = Function<
     fn(ForwardableEmailMessage, Env, ExecutionContext<Props>) -> JsOption<Promise<Undefined>>,
 >;
 pub mod cloudflare {
@@ -34095,9 +34092,9 @@ pub mod cloudflare {
         pub type GlobalProps;
     }
     #[allow(dead_code)]
-    pub type GlobalProp<K, Default> = JsValue;
+    pub type GlobalProp = JsValue;
     #[allow(dead_code)]
-    pub type MainModule = GlobalProp<JsString, Object>;
+    pub type MainModule = GlobalProp;
     #[allow(dead_code)]
     pub type Exports = JsValue;
     pub mod workers {
@@ -36369,7 +36366,7 @@ impl MediaError {
     }
 }
 #[allow(dead_code)]
-pub type Params<P> = Object;
+pub type Params = Object;
 #[wasm_bindgen]
 extern "C" {
     # [wasm_bindgen (extends = Object)]
@@ -36488,7 +36485,7 @@ extern "C" {
         Data: ::wasm_bindgen::JsGeneric,
     >(
         this: &EventContext<Env, P, Data>,
-    ) -> Params<P>;
+    ) -> Params;
     #[wasm_bindgen(method, setter)]
     pub fn set_params<
         Env: ::wasm_bindgen::JsGeneric,
@@ -36496,7 +36493,7 @@ extern "C" {
         Data: ::wasm_bindgen::JsGeneric,
     >(
         this: &EventContext<Env, P, Data>,
-        val: &Params<P>,
+        val: &Params,
     );
     #[wasm_bindgen(method, getter)]
     pub fn data<
@@ -36529,7 +36526,7 @@ impl<
         pass_through_on_exception: &Function<fn() -> Undefined>,
         next: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
         env: &Env,
-        params: &Params<P>,
+        params: &Params,
         data: &Data,
     ) -> EventContext<Env, P, Data> {
         let inner: EventContext<Env, P, Data> = JsCast::unchecked_into(js_sys::Object::new());
@@ -36545,7 +36542,7 @@ impl<
     }
 }
 #[allow(dead_code)]
-pub type PagesFunction<Env, Params, Data> =
+pub type PagesFunction<Env = JsValue, Params = JsValue, Data = Object> =
     Function<fn(EventContext<Env, Params, Data>) -> JsValue>;
 #[wasm_bindgen]
 extern "C" {
@@ -36679,7 +36676,7 @@ extern "C" {
         PluginArgs: ::wasm_bindgen::JsGeneric,
     >(
         this: &EventPluginContext<Env, P, Data, PluginArgs>,
-    ) -> Params<P>;
+    ) -> Params;
     #[wasm_bindgen(method, setter)]
     pub fn set_params<
         Env: ::wasm_bindgen::JsGeneric,
@@ -36688,7 +36685,7 @@ extern "C" {
         PluginArgs: ::wasm_bindgen::JsGeneric,
     >(
         this: &EventPluginContext<Env, P, Data, PluginArgs>,
-        val: &Params<P>,
+        val: &Params,
     );
     #[wasm_bindgen(method, getter)]
     pub fn data<
@@ -36743,7 +36740,7 @@ impl<
         pass_through_on_exception: &Function<fn() -> Undefined>,
         next: &Function<fn(JsValue, RequestInit) -> Promise<Response>>,
         env: &Env,
-        params: &Params<P>,
+        params: &Params,
         data: &Data,
         plugin_args: &PluginArgs,
     ) -> EventPluginContext<Env, P, Data, PluginArgs> {
@@ -36762,7 +36759,7 @@ impl<
     }
 }
 #[allow(dead_code)]
-pub type PagesPluginFunction<Env, Params, Data, PluginArgs> =
+pub type PagesPluginFunction<Env = JsValue, Params = JsValue, Data = Object, PluginArgs = JsValue> =
     Function<fn(EventPluginContext<Env, Params, Data, PluginArgs>) -> JsValue>;
 pub mod assets {
     #[allow(unused_imports)]
@@ -36772,7 +36769,7 @@ pub mod assets {
         #[allow(non_upper_case_globals)]
         #[wasm_bindgen(thread_local_v2, js_name = "onRequest")]
         pub static on_request:
-            Function<fn(super::EventContext<super::Env, Object, Data>) -> JsValue>;
+            Function<fn(super::EventContext<JsValue, JsValue, Object>) -> JsValue>;
     }
 }
 #[wasm_bindgen]
@@ -36952,7 +36949,7 @@ pub mod rpc {
     #[allow(dead_code)]
     pub type Stubable = JsValue;
     #[allow(dead_code)]
-    pub type Serializable<T> = JsValue;
+    pub type Serializable = JsValue;
     #[wasm_bindgen]
     extern "C" {
         # [wasm_bindgen (extends = super :: Disposable , extends = Object , js_namespace = "Rpc")]
@@ -36974,23 +36971,23 @@ pub mod rpc {
     #[allow(dead_code)]
     pub type BaseType = JsValue;
     #[allow(dead_code)]
-    pub type Stubify<T> = JsValue;
+    pub type Stubify = JsValue;
     #[allow(dead_code)]
-    pub type Unstubify<T> = JsValue;
+    pub type Unstubify = JsValue;
     #[allow(dead_code)]
-    pub type UnstubifyAll<A> = JsValue;
+    pub type UnstubifyAll = JsValue;
     #[allow(dead_code)]
-    pub type MaybeProvider<T> = JsValue;
+    pub type MaybeProvider = JsValue;
     #[allow(dead_code)]
-    pub type MaybeDisposable<T> = JsValue;
+    pub type MaybeDisposable = JsValue;
     #[allow(dead_code)]
-    pub type Result_<R> = JsValue;
+    pub type Result_ = JsValue;
     #[allow(dead_code)]
-    pub type MethodOrProperty<V> = JsValue;
+    pub type MethodOrProperty = JsValue;
     #[allow(dead_code)]
-    pub type MaybeCallableProvider<T> = JsValue;
+    pub type MaybeCallableProvider = JsValue;
     #[allow(dead_code)]
-    pub type Provider<T, Reserved> = JsValue;
+    pub type Provider = JsValue;
 }
 #[wasm_bindgen]
 extern "C" {
@@ -39933,7 +39930,7 @@ pub mod tail_stream {
         }
     }
     #[allow(dead_code)]
-    pub type TailEventHandler<Event> =
+    pub type TailEventHandler<Event = JsValue> =
         Function<fn(TailEvent<Event>) -> JsOption<Promise<Undefined>>>;
     #[wasm_bindgen]
     extern "C" {

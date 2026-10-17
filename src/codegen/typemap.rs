@@ -216,6 +216,21 @@ pub struct CodegenContext<'a> {
     /// offending pair keeps the output focused when many references
     /// point at the same unconfigured module.
     pub unresolved_module_refs: RefCell<HashSet<(String, String)>>,
+    /// [`Self::alias_params`], by the alias's body scope.
+    alias_params: RefCell<HashMap<ScopeId, AliasParams>>,
+    /// The type parameters lowered while [`Self::alias_params`] probes an
+    /// alias, innermost probe last.
+    alias_param_mentions: RefCell<Vec<HashSet<String>>>,
+}
+
+/// How a local generic alias's type parameters carry over to the Rust
+/// alias; see [`CodegenContext::alias_params`].
+#[derive(Clone)]
+pub(crate) struct AliasParams {
+    /// Whether the Rust alias declares each parameter.
+    pub kept: Vec<bool>,
+    /// Whether each kept parameter has its default on the Rust alias.
+    pub defaulted: Vec<bool>,
 }
 
 /// Registry of synthesised dynamic-union enums, plus the bookkeeping
@@ -419,6 +434,164 @@ impl<'a> CodegenContext<'a> {
         }
     }
 
+    /// The Rust target of a local type alias, lowered in the alias's own
+    /// scope so its type parameters bind. An enum target has no inner form,
+    /// so it is named directly.
+    pub(crate) fn alias_target(
+        &self,
+        alias: &ir::TypeAliasDecl,
+        from_module: &ModuleContext,
+    ) -> TokenStream {
+        let pos = if self.enum_kind(&alias.target, alias.body_scope).is_some() {
+            TypePosition::RETURN
+        } else {
+            TypePosition::ARGUMENT.to_inner()
+        };
+        to_syn_type(
+            &alias.target,
+            pos,
+            Some(self),
+            alias.body_scope,
+            from_module,
+        )
+    }
+
+    /// The Rust default of a type parameter of `alias`, lowered in the
+    /// alias's scope like a generic argument at a use site.
+    pub(crate) fn alias_param_default(
+        &self,
+        default: &TypeRef,
+        alias: &ir::TypeAliasDecl,
+        from_module: &ModuleContext,
+    ) -> TokenStream {
+        if Self::generic_mono(Some(self)) {
+            to_mono_user_generic_arg(default, Some(self), alias.body_scope, from_module)
+        } else {
+            to_syn_type(
+                default,
+                TypePosition::ARGUMENT.to_inner(),
+                Some(self),
+                alias.body_scope,
+                from_module,
+            )
+        }
+    }
+
+    /// The type parameters of the alias being probed that `lower` emits.
+    fn mentioned_params(&self, lower: impl FnOnce()) -> HashSet<String> {
+        self.alias_param_mentions.borrow_mut().push(HashSet::new());
+        lower();
+        self.alias_param_mentions
+            .borrow_mut()
+            .pop()
+            .unwrap_or_default()
+    }
+
+    /// Which of a local generic alias's type parameters the Rust alias
+    /// keeps, and which keep their defaults.
+    ///
+    /// A Rust alias can't declare a parameter its target doesn't use
+    /// (E0091), and lowering can erase one (`Missing<T>` → `JsValue`,
+    /// `T & { b: B }` → `T`), so those are dropped from the declaration and
+    /// from every instantiation. The trailing kept parameters keep their
+    /// defaults, lowered in the alias's scope, unless one names a dropped
+    /// parameter.
+    pub(crate) fn alias_params(
+        &self,
+        alias: &ir::TypeAliasDecl,
+        from_module: &ModuleContext,
+    ) -> Option<AliasParams> {
+        if alias.type_params.is_empty() || alias.from_module.is_some() {
+            return None;
+        }
+        if let Some(params) = self.alias_params.borrow().get(&alias.body_scope) {
+            return Some(params.clone());
+        }
+        let n = alias.type_params.len();
+        // A recursive alias sees every parameter as kept, and passes every
+        // argument, while its own target is lowered.
+        self.alias_params.borrow_mut().insert(
+            alias.body_scope,
+            AliasParams {
+                kept: vec![true; n],
+                defaulted: vec![false; n],
+            },
+        );
+        // The declaration reports these lowerings' diagnostics when it's
+        // emitted.
+        let diagnostics = self.diagnostics.take();
+        let reported = self.unresolved_module_refs.borrow().clone();
+        let in_target = self.mentioned_params(|| {
+            self.alias_target(alias, from_module);
+        });
+        let in_defaults: Vec<Option<HashSet<String>>> = alias
+            .type_params
+            .iter()
+            .map(|tp| {
+                let default = tp.default.as_ref()?;
+                Some(self.mentioned_params(|| {
+                    self.alias_param_default(default, alias, from_module);
+                }))
+            })
+            .collect();
+        self.diagnostics.replace(diagnostics);
+        self.unresolved_module_refs.replace(reported);
+        let kept: Vec<bool> = alias
+            .type_params
+            .iter()
+            .map(|tp| in_target.contains(&tp.name))
+            .collect();
+        let mut defaulted = vec![false; n];
+        for i in (0..n).rev().filter(|&i| kept[i]) {
+            let Some(mentions) = &in_defaults[i] else {
+                break;
+            };
+            let names_dropped = alias
+                .type_params
+                .iter()
+                .zip(&kept)
+                .any(|(tp, &kept)| !kept && mentions.contains(&tp.name));
+            if names_dropped {
+                break;
+            }
+            defaulted[i] = true;
+        }
+        let params = AliasParams { kept, defaulted };
+        self.alias_params
+            .borrow_mut()
+            .insert(alias.body_scope, params.clone());
+        Some(params)
+    }
+
+    /// The arguments an instantiation of the generic alias `name` resolves
+    /// to passes to the Rust alias. One the Rust alias has a default for is
+    /// left to it when omitted, along with every omitted one after it; TS's
+    /// defaults fill the others (`U = T` with `T` dropped), then the
+    /// parameters the alias drops are skipped.
+    fn alias_args(&self, name: &str, scope: ScopeId, args: &[TypeRef]) -> Option<Vec<TypeRef>> {
+        let id = self.gctx.resolve_path(scope, name)?;
+        let decl = self.gctx.get_type(id);
+        let TypeKind::TypeAlias(alias) = &decl.kind else {
+            return None;
+        };
+        let params = self.alias_params(alias, &decl.module_context)?;
+        let mut given: HashMap<&str, TypeRef> = HashMap::new();
+        let mut out = Vec::new();
+        for (i, tp) in alias.type_params.iter().enumerate() {
+            let arg = match (args.get(i), &tp.default) {
+                (Some(arg), _) => arg.clone(),
+                _ if params.defaulted[i] => break,
+                (None, Some(default)) => substitute_type_params(default, &given),
+                (None, None) => TypeRef::Any,
+            };
+            if params.kept[i] {
+                out.push(arg.clone());
+            }
+            given.insert(&tp.name, arg);
+        }
+        Some(out)
+    }
+
     /// Build the attribute for a generated extern block, including the
     /// per-monomorphization opt-in when enabled.
     pub(crate) fn extern_attr(
@@ -496,6 +669,8 @@ impl<'a> CodegenContext<'a> {
             exported_modules,
             externalised_modules,
             unresolved_module_refs: RefCell::new(HashSet::new()),
+            alias_params: RefCell::new(HashMap::new()),
+            alias_param_mentions: RefCell::new(Vec::new()),
         };
         for (spec, scopes) in &gctx.ambient_module_scopes {
             let path = ctx.specifier_path(spec);
@@ -533,6 +708,8 @@ impl<'a> CodegenContext<'a> {
             exported_modules: HashSet::new(),
             externalised_modules: HashSet::new(),
             unresolved_module_refs: RefCell::new(HashSet::new()),
+            alias_params: RefCell::new(HashMap::new()),
+            alias_param_mentions: RefCell::new(Vec::new()),
         }
     }
 
@@ -640,7 +817,14 @@ impl<'a> CodegenContext<'a> {
     /// non-alias declaration (Class, Interface, Enum, etc.) or is not found.
     ///
     /// Uses a visited set to detect and break circular alias chains.
-    pub fn resolve_alias(&self, name: &str, scope: ScopeId) -> Option<&ir::TypeRef> {
+    ///
+    /// A generic alias named bare means its defaults (`Fetcher` is
+    /// `Fetcher<undefined>`), so they replace its parameters in the target.
+    pub fn resolve_alias(
+        &self,
+        name: &str,
+        scope: ScopeId,
+    ) -> Option<std::borrow::Cow<'_, ir::TypeRef>> {
         let mut visited = HashSet::new();
         self.resolve_alias_impl(name, scope, &mut visited)
     }
@@ -648,20 +832,18 @@ impl<'a> CodegenContext<'a> {
     /// The string or numeric enum declaration `ty` names, through aliases
     /// and qualified paths.
     pub(crate) fn enum_kind(&self, ty: &ir::TypeRef, scope: ScopeId) -> Option<&TypeKind> {
-        let ty = ty
-            .as_ident()
-            .and_then(|name| self.resolve_alias(name, scope))
-            .unwrap_or(ty);
-        let ir::TypeRef::Reference {
-            segments,
-            generic_args,
-        } = ty
-        else {
+        // An enum, or an alias to one, takes no arguments, so any given
+        // don't matter.
+        let resolved = match ty {
+            ir::TypeRef::Reference { segments, .. } if segments.len() == 1 => {
+                self.resolve_alias(&segments[0], scope)
+            }
+            _ => None,
+        };
+        let ty = resolved.as_deref().unwrap_or(ty);
+        let ir::TypeRef::Reference { segments, .. } = ty else {
             return None;
         };
-        if !generic_args.is_empty() {
-            return None;
-        }
         let id = self.gctx.resolve_path(scope, &segments.join("."))?;
         let kind = &self.gctx.get_type(id).kind;
         matches!(kind, TypeKind::StringEnum(_) | TypeKind::NumericEnum(_)).then_some(kind)
@@ -685,25 +867,23 @@ impl<'a> CodegenContext<'a> {
         name: &str,
         scope: ScopeId,
         visited: &mut HashSet<String>,
-    ) -> Option<&'b ir::TypeRef> {
+    ) -> Option<std::borrow::Cow<'b, ir::TypeRef>> {
         if !visited.insert(name.to_string()) {
             return None; // circular alias chain
         }
-        if let Some(type_id) = self.gctx.scopes.resolve(scope, name) {
-            let decl = self.gctx.get_type(type_id);
-            if let TypeKind::TypeAlias(ref alias) = decl.kind {
-                // If the target is itself a single-segment path,
-                // keep resolving. Generic instantiations and
-                // qualified paths stop here.
-                if let Some(inner_name) = alias.target.as_ident() {
-                    if let Some(resolved) = self.resolve_alias_impl(inner_name, scope, visited) {
-                        return Some(resolved);
-                    }
-                }
-                return Some(&alias.target);
+        let type_id = self.gctx.scopes.resolve(scope, name)?;
+        let TypeKind::TypeAlias(ref alias) = self.gctx.get_type(type_id).kind else {
+            return None;
+        };
+        let target = alias_target_with_defaults(alias);
+        // If the target is itself a single-segment path, keep resolving.
+        // Generic instantiations and qualified paths stop here.
+        if let Some(inner_name) = target.as_ident() {
+            if let Some(resolved) = self.resolve_alias_impl(inner_name, scope, visited) {
+                return Some(resolved);
             }
         }
-        None
+        Some(target)
     }
 
     /// Emit an error diagnostic during code generation.
@@ -1182,7 +1362,7 @@ pub fn to_syn_type(
                         );
                     }
                     if let Some(target) = c.resolve_alias(&segments[0], scope) {
-                        let target = target.clone();
+                        let target = target.into_owned();
                         return to_syn_type(&target, pos, ctx, scope, from_module);
                     }
                     // Synthesised enum names never collide with declared
@@ -1201,7 +1381,8 @@ pub fn to_syn_type(
                     if let Some(TypeKind::TypeAlias(alias)) =
                         resolved.map(|id| &c.gctx.get_type(id).kind)
                     {
-                        return to_syn_type(&alias.target, pos, ctx, alias.body_scope, from_module);
+                        let target = alias_target_with_defaults(alias);
+                        return to_syn_type(&target, pos, ctx, alias.body_scope, from_module);
                     }
                 }
             }
@@ -1607,6 +1788,9 @@ fn lower_reference(
                 c.gctx.scopes.resolve_binding(scope, head),
                 Some(crate::parse::scope::Binding::TypeParam),
             ) {
+                if let Some(mentions) = c.alias_param_mentions.borrow_mut().last_mut() {
+                    mentions.insert(head.to_string());
+                }
                 let ident = make_ident(head);
                 return quote! { #ident };
             }
@@ -1643,6 +1827,13 @@ fn with_generic_args(
         }
         return base;
     }
+    let generic_args = match ctx.and_then(|c| c.alias_args(name, scope, generic_args)) {
+        Some(args) => args,
+        None => generic_args.to_vec(),
+    };
+    if generic_args.is_empty() {
+        return base;
+    }
     let arg_tokens: Vec<TokenStream> = generic_args
         .iter()
         .map(|a| {
@@ -1662,6 +1853,59 @@ fn with_generic_args(
 fn is_buffer_generic(name: &str) -> bool {
     matches!(name, "Uint8ClampedArray" | "DataView")
         || ir::TypedArrayElement::of_typed_array(name).is_some()
+}
+
+/// `alias`'s target with each type parameter replaced by its default, in
+/// order so a default can name an earlier parameter (`Cf = CfProperties<M>`).
+/// A parameter without one, which TS only allows when the alias isn't named
+/// bare, stands for `any`.
+fn alias_target_with_defaults(alias: &ir::TypeAliasDecl) -> std::borrow::Cow<'_, TypeRef> {
+    if alias.type_params.is_empty() {
+        return std::borrow::Cow::Borrowed(&alias.target);
+    }
+    let mut defaults: HashMap<&str, TypeRef> = HashMap::new();
+    for tp in &alias.type_params {
+        let default = tp
+            .default
+            .as_ref()
+            .map_or(TypeRef::Any, |d| substitute_type_params(d, &defaults));
+        defaults.insert(&tp.name, default);
+    }
+    std::borrow::Cow::Owned(substitute_type_params(&alias.target, &defaults))
+}
+
+/// `ty` with each bare reference to a name in `params` replaced.
+fn substitute_type_params(ty: &TypeRef, params: &HashMap<&str, TypeRef>) -> TypeRef {
+    let sub = |t: &TypeRef| substitute_type_params(t, params);
+    match ty {
+        TypeRef::Reference {
+            segments,
+            generic_args,
+        } => match (segments.as_slice(), generic_args.is_empty()) {
+            ([name], true) if params.contains_key(name.as_str()) => params[name.as_str()].clone(),
+            _ => TypeRef::Reference {
+                segments: segments.clone(),
+                generic_args: generic_args.iter().map(sub).collect(),
+            },
+        },
+        TypeRef::Array(t) => TypeRef::Array(Box::new(sub(t))),
+        TypeRef::Nullable(t) => TypeRef::Nullable(Box::new(sub(t))),
+        TypeRef::Union(ts) => TypeRef::Union(ts.iter().map(sub).collect()),
+        TypeRef::Intersection(ts) => TypeRef::Intersection(ts.iter().map(sub).collect()),
+        TypeRef::Tuple(ts) => TypeRef::Tuple(ts.iter().map(sub).collect()),
+        TypeRef::Function(sig) => TypeRef::Function(ir::FunctionSig {
+            params: sig
+                .params
+                .iter()
+                .map(|p| ir::Param {
+                    type_ref: sub(&p.type_ref),
+                    ..p.clone()
+                })
+                .collect(),
+            return_type: Box::new(sub(&sig.return_type)),
+        }),
+        other => other.clone(),
+    }
 }
 
 /// Create a `syn::Ident`, sanitizing invalid characters and escaping keywords.
@@ -1793,7 +2037,8 @@ pub(crate) fn peel_mono<'t>(
                 if !visited.insert(segments[0].clone()) {
                     break;
                 }
-                ctx.resolve_alias(&segments[0], scope).cloned()
+                ctx.resolve_alias(&segments[0], scope)
+                    .map(std::borrow::Cow::into_owned)
             }
             TypeRef::Union(members) => {
                 crate::codegen::subtyping::lub_union(members, Some(ctx), scope)
@@ -1832,14 +2077,17 @@ fn local_generic_args<'t>(
     ty: &'t TypeRef,
     ctx: &CodegenContext<'_>,
     scope: ScopeId,
-) -> Option<&'t [TypeRef]> {
+) -> Option<std::borrow::Cow<'t, [TypeRef]>> {
     match ty {
         TypeRef::Reference {
             segments,
             generic_args,
-        } if !generic_args.is_empty() && ctx.is_local_generic(&segments.join("."), scope) => {
-            Some(generic_args)
-        }
+        } if !generic_args.is_empty() && ctx.is_local_generic(&segments.join("."), scope) => Some(
+            match ctx.alias_args(&segments.join("."), scope, generic_args) {
+                Some(args) => std::borrow::Cow::Owned(args),
+                None => std::borrow::Cow::Borrowed(generic_args),
+            },
+        ),
         _ => None,
     }
 }
@@ -1984,8 +2232,11 @@ fn to_mono_js_string_return_type_impl(
         }
         t @ TypeRef::Reference { segments, .. } if local_generic_args(t, ctx, scope).is_some() => {
             let base = named_type_to_rust(&segments[0], Some(ctx), scope, from_module);
-            let args = local_generic_args(t, ctx, scope)
-                .unwrap_or_default()
+            let args = local_generic_args(t, ctx, scope).unwrap_or_default();
+            if args.is_empty() {
+                return base;
+            }
+            let args = args
                 .iter()
                 .map(|arg| {
                     let mut visited = visited.clone();
@@ -2510,6 +2761,39 @@ mod tests {
         assert_eq!(make_ident("$$").to_string(), "DollarDollar");
         assert_eq!(make_ident("_").to_string(), "Underscore");
         assert_eq!(make_ident("☃").to_string(), "__unknown__");
+    }
+
+    #[test]
+    fn alias_target_with_defaults_substitutes_in_order() {
+        let ident = |name: &str| TypeRef::Reference {
+            segments: vec![name.to_string()],
+            generic_args: vec![],
+        };
+        let param = |name: &str, default: Option<TypeRef>| ir::TypeParam {
+            name: name.to_string(),
+            constraint: None,
+            default,
+        };
+        // `<T, U = T[], V>`: `U` sees `T`'s default, `V` has none.
+        let alias = ir::TypeAliasDecl {
+            name: "A".to_string(),
+            type_params: vec![
+                param("T", Some(TypeRef::String)),
+                param("U", Some(TypeRef::Array(Box::new(ident("T"))))),
+                param("V", None),
+            ],
+            target: TypeRef::Union(vec![ident("U"), ident("V"), ident("W")]),
+            from_module: None,
+            body_scope: ScopeId(0),
+        };
+        assert_eq!(
+            *alias_target_with_defaults(&alias),
+            TypeRef::Union(vec![
+                TypeRef::Array(Box::new(TypeRef::String)),
+                TypeRef::Any,
+                ident("W"),
+            ])
+        );
     }
 
     #[test]
