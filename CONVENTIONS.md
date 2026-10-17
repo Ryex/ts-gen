@@ -2516,16 +2516,42 @@ Numeric enums lower similarly with explicit discriminant values and a
 Member initialisers are evaluated as TypeScript does: numeric and string
 literals, unary and binary constant expressions with JS numeric
 semantics (bitwise operators on int32, `>>>` on uint32), string
-concatenation, and references to earlier members, bare or qualified by
-the enum's own name. A member without an initialiser continues from the
-previous member's evaluated value. An enum is numeric when any member
-evaluates to a number, so `Read = 1 << 0` alone is enough, and a string
-enum otherwise.
+concatenation, references to the same enum's members, bare or qualified,
+and references to another enum's members through its path
+(`Base.Default`, `Ns.Inner.Value`, `Base["Other"]`), including one in
+another file. A reference into the member's own declaration can only reach
+an earlier member, but one into another declaration of the enum can reach
+any. A member without an initialiser continues from the previous
+member's evaluated value, or is 0 as the first member of its declaration.
+An enum is numeric when any member evaluates to a number, so
+`Read = 1 << 0` alone is enough, and a string enum otherwise.
 
-A member whose value can't be evaluated, such as `B = Other.X`, or one
-continuing from it, is skipped with a diagnostic. Its value is only known
-at runtime, and a guessed discriminant could repeat a real member's value
-and turn that member into an alias of it.
+The declarations of a merged enum, those of one name in the same namespace
+path of one scope, are evaluated in order as one enum, whose members can
+reference each other's, and emitted once at the first. The scope is the
+global scope of every file (script files and `declare global` blocks), the
+`declare module` blocks of one module, or a module file's top level, so a
+same-named enum in an imported module file stays a separate enum:
+
+```ts
+declare enum Base { Default = 2 }
+declare enum Mode { A = Base.Default, B, C = A | 8 }
+declare enum Merged { A = 1 }
+declare enum Merged { B = A + 1 }
+```
+
+```rust
+pub enum Base { Default = 2 }
+pub enum Mode { A = 2, B = 3, C = 10 }
+pub enum Merged { A = 1, B = 2 }
+```
+
+A member whose value can't be evaluated, such as `B = Undeclared.X` or
+one in a reference cycle, or one continuing from it, is skipped with a
+diagnostic. Its value is only known at runtime, and a guessed discriminant
+could repeat a real member's value and turn that member into an alias of
+it. wasm-bindgen can't export an enum without variants, so an enum left
+with none is erased to `JsValue` with a diagnostic.
 
 A member whose value repeats an earlier member's is an alias, not a
 second variant: wasm-bindgen rejects duplicate discriminants, and two
