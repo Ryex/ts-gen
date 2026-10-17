@@ -472,21 +472,70 @@ pub(crate) fn synthesize_inline(
 
 /// Whether a single-segment name may appear in an interface's `extends`.
 /// A type parameter cannot; nor can an alias phase 1 already knows is not
-/// an object type. A name with no local binding (an import, an
-/// `--external` mapping, or a typo) is allowed through, as is an alias
-/// whose target is still unknown: codegen resolves them, and drops a
-/// parent that erases, keeping the literal's own members.
+/// an object type or a generic alias whose target mentions its own type
+/// parameters. A name
+/// with no local binding (an import, an `--external` mapping, or a typo)
+/// is allowed through, as is an alias whose target is still unknown:
+/// codegen resolves them, and drops a parent that erases, keeping the
+/// literal's own members.
 fn is_extendable(name: &str, scope: ScopeId, ctx: &ParseCtx<'_, '_>) -> bool {
-    match ctx.scopes.resolve_binding(scope, name) {
-        Some(crate::parse::scope::Binding::Declared(id)) => {
-            match &ctx.type_arena[id.index()].kind {
-                TypeKind::Class(_) | TypeKind::Interface(_) => true,
-                TypeKind::TypeAlias(a) => matches!(a.target, TypeRef::Any),
-                _ => false,
-            }
+    is_extendable_in(name, scope, ctx, &mut std::collections::HashSet::new())
+}
+
+/// [`is_extendable`], following an alias to another name and an
+/// intersection alias's own parents, so that each placeholder along the
+/// chain is checked.
+fn is_extendable_in(
+    name: &str,
+    scope: ScopeId,
+    ctx: &ParseCtx<'_, '_>,
+    visited: &mut std::collections::HashSet<crate::context::TypeId>,
+) -> bool {
+    let id = match ctx.scopes.resolve_binding(scope, name) {
+        Some(crate::parse::scope::Binding::Declared(id)) => id,
+        Some(crate::parse::scope::Binding::TypeParam) => return false,
+        None => return true,
+    };
+    // A cycle is not a valid TS type, so never hoists.
+    if !visited.insert(id) {
+        return false;
+    }
+    let decl = &ctx.type_arena[id.index()];
+    let follows = |target: &TypeRef, visited: &mut std::collections::HashSet<_>| match target {
+        TypeRef::Reference { segments, .. } if segments.len() == 1 => {
+            is_extendable_in(&segments[0], decl.scope_id, ctx, visited)
         }
-        Some(crate::parse::scope::Binding::TypeParam) => false,
-        None => true,
+        _ => true,
+    };
+    let extendable = match &decl.kind {
+        TypeKind::Class(_) => true,
+        TypeKind::Interface(i) => i.extends.iter().all(|parent| follows(parent, visited)),
+        // Lowering the target doesn't substitute the alias's arguments, so
+        // `Id<Local>` for `type Id<T> = T` would lower to a bare `T`.
+        TypeKind::TypeAlias(a) if mentions_param(&a.target, &a.type_params) => false,
+        TypeKind::TypeAlias(a) => match &a.target {
+            TypeRef::Any => true,
+            target @ TypeRef::Reference { .. } => follows(target, visited),
+            _ => false,
+        },
+        _ => false,
+    };
+    visited.remove(&id);
+    extendable
+}
+
+fn mentions_param(ty: &TypeRef, params: &[TypeParam]) -> bool {
+    match ty {
+        TypeRef::Reference {
+            segments,
+            generic_args,
+        } => {
+            (segments.len() == 1 && params.iter().any(|p| p.name == segments[0]))
+                || generic_args.iter().any(|arg| mentions_param(arg, params))
+        }
+        TypeRef::Array(elem) => mentions_param(elem, params),
+        TypeRef::Intersection(parts) => parts.iter().any(|part| mentions_param(part, params)),
+        _ => false,
     }
 }
 

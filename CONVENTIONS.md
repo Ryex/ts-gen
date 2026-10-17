@@ -850,7 +850,12 @@ intersection of those types, which is bounded at codegen (see
 Every parent must be something an interface could `extends`. A type
 parameter (`T & { id: string }`) or an alias to a non-object type
 (`type Id = string`) leaves the intersection unhoisted, to be bounded
-at codegen. Imported and `--external` names have no local binding and
+at codegen. Aliases to other names are followed (`type Id2 = Id`), and
+so are the parents of an intersection alias, so `Id & { … }` as a parent
+refuses too. A generic alias whose target mentions its own type
+parameters (`type Branded<T> = T & { … }`, `type Same<T> = T`,
+`type Of<T> = Provider<T>`) is refused, since its arguments are not
+substituted into the target. Imported and `--external` names have no local binding and
 are allowed through. A parent that erases at codegen (a conditional
 type, or a name that never resolves and is reported) is dropped from
 `extends` rather than replaced, so the first real parent stays the
