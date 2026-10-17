@@ -4,15 +4,15 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::codegen::signatures::{
-    build_signatures, generate_concrete_params_with_mono_bounds, is_void_return,
+    build_signatures, generate_concrete_params_with_mono_bounds, is_void_return, public_rust_name,
     render_generic_bounds, CallableSpec, FunctionSignature, SignatureKind,
 };
 use crate::codegen::typemap::{to_return_type, to_syn_type, CodegenContext, TypePosition};
 use crate::parse::scope::ScopeId;
-use crate::util::naming::{LocalScope, Suffix};
-use std::collections::HashSet;
+use crate::util::naming::{ident_chars, naming_priority, LocalScope, Suffix};
+use std::collections::{HashMap, HashSet};
 
-use crate::ir::{FunctionDecl, ModuleContext, VariableDecl};
+use crate::ir::{FunctionDecl, ModuleContext, TypeDeclaration, TypeKind, VariableDecl};
 
 /// Generate wasm_bindgen extern blocks for a free function.
 ///
@@ -24,8 +24,9 @@ pub fn generate_function(
     cgctx: Option<&CodegenContext<'_>>,
     doc: &Option<String>,
     scope: ScopeId,
+    value_names: &mut ValueNames,
 ) -> TokenStream {
-    emit_function(decl, ctx, cgctx, doc, &[], scope)
+    emit_function(decl, ctx, cgctx, doc, &[], scope, value_names)
 }
 
 /// Generate wasm_bindgen extern blocks for a free function inside a namespace.
@@ -36,8 +37,9 @@ pub fn generate_function_with_js_namespace(
     cgctx: Option<&CodegenContext<'_>>,
     doc: &Option<String>,
     scope: ScopeId,
+    value_names: &mut ValueNames,
 ) -> TokenStream {
-    emit_function(decl, ctx, cgctx, doc, js_namespace, scope)
+    emit_function(decl, ctx, cgctx, doc, js_namespace, scope, value_names)
 }
 
 fn emit_function(
@@ -47,13 +49,17 @@ fn emit_function(
     doc: &Option<String>,
     js_namespace: &[String],
     scope: ScopeId,
+    value_names: &mut ValueNames,
 ) -> TokenStream {
-    let mut names = LocalScope::default();
+    let rust_name = value_names.take(
+        &binding_key(ctx, &decl.js_name),
+        public_rust_name(&ident_chars(&decl.name)),
+    );
     let overloads = [decl.params.as_slice()];
     let sigs = build_signatures(
         &CallableSpec {
             js_name: &decl.js_name,
-            rust_name: Some(&decl.name),
+            rust_name: Some(&rust_name),
             kind: SignatureKind::Function,
             overloads: &[overloads[0]],
             return_type: &decl.return_type,
@@ -61,7 +67,7 @@ fn emit_function(
             doc,
             body_scope: decl.body_scope,
         },
-        &mut names,
+        &mut value_names.idents,
         cgctx,
         decl.body_scope,
     );
@@ -176,15 +182,82 @@ fn generic_bounds_for_function(
         .collect()
 }
 
-/// Statics already emitted into one Rust module.
+/// A value binding: its module specifier and JS name.
+type BindingKey = (Option<String>, String);
+
+fn binding_key(ctx: &ModuleContext, js_name: &str) -> BindingKey {
+    (ctx.specifier().map(str::to_string), js_name.to_string())
+}
+
+/// The names of the free functions and statics in one Rust module, which
+/// share its value namespace.
 ///
 /// `declare var` may be redeclared, including across input files, so a
 /// repeated JS binding is emitted once. Distinct bindings that convert to
-/// the same ident (`fooBar` / `FOO_BAR`) are numbered instead.
+/// the same ident (`fooBar` / `FOO_BAR`, `ajax` / `$ajax`) are numbered
+/// instead, claiming in [`naming_priority`] order so `ajax` keeps its name
+/// whichever is declared first.
 #[derive(Default)]
-pub struct StaticNames {
+pub struct ValueNames {
     idents: LocalScope,
-    bindings: HashSet<(Option<String>, String)>,
+    bindings: HashSet<BindingKey>,
+    names: HashMap<BindingKey, String>,
+}
+
+impl ValueNames {
+    /// Name every function and static among `decls` up front. Each name
+    /// stays reserved until its binding is emitted, so a derived `try_`
+    /// name declared earlier can't take it.
+    pub fn new<'d>(decls: impl IntoIterator<Item = &'d TypeDeclaration>) -> Self {
+        let mut values: Vec<(BindingKey, String, u8)> = decls
+            .into_iter()
+            .filter_map(|decl| {
+                let (js_name, name, is_fn) = match &decl.kind {
+                    TypeKind::Function(f) => (&f.js_name, &f.name, true),
+                    TypeKind::Variable(v) => (&v.js_name, &v.name, false),
+                    _ => return None,
+                };
+                let ident = ident_chars(name);
+                let priority = naming_priority(js_name, &ident);
+                let candidate = if is_fn {
+                    public_rust_name(&ident)
+                } else {
+                    ident
+                };
+                Some((
+                    binding_key(&decl.module_context, js_name),
+                    candidate,
+                    priority,
+                ))
+            })
+            .collect();
+        values.sort_by_key(|(.., priority)| *priority);
+        let mut idents = LocalScope::default();
+        let mut names = HashMap::new();
+        for (key, candidate, _) in values {
+            names.entry(key).or_insert_with(|| {
+                let name = idents.declare(&candidate, Suffix::Snake);
+                idents.reserve(name.clone());
+                name
+            });
+        }
+        Self {
+            idents,
+            bindings: HashSet::new(),
+            names,
+        }
+    }
+
+    /// The name chosen for `key`, freed for its binding to declare.
+    fn take(&mut self, key: &BindingKey, fallback: String) -> String {
+        match self.names.get(key) {
+            Some(name) => {
+                self.idents.unreserve(name);
+                name.clone()
+            }
+            None => fallback,
+        }
+    }
 }
 
 /// Generate a wasm_bindgen extern block for a global constant/variable.
@@ -195,14 +268,14 @@ pub fn generate_variable(
     doc: &Option<String>,
     js_namespace: &[String],
     scope: ScopeId,
-    static_names: &mut StaticNames,
+    value_names: &mut ValueNames,
 ) -> TokenStream {
-    let binding = (ctx.specifier().map(str::to_string), decl.js_name.clone());
-    if !static_names.bindings.insert(binding) {
+    let binding = binding_key(ctx, &decl.js_name);
+    if !value_names.bindings.insert(binding.clone()) {
         return TokenStream::new();
     }
-    let base = super::typemap::make_ident(&decl.name).to_string();
-    let rust_name = static_names.idents.declare(&base, Suffix::Snake);
+    let base = value_names.take(&binding, ident_chars(&decl.name));
+    let rust_name = value_names.idents.declare(&base, Suffix::Snake);
     let rust_ident = super::typemap::make_ident(&rust_name);
     let ty = to_syn_type(&decl.type_ref, TypePosition::RETURN, cgctx, scope, ctx);
     let doc = super::doc_tokens(doc);

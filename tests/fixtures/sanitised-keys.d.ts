@@ -39,3 +39,47 @@ export declare enum Sigil {
   "$" = 1,
   "_" = 2,
 }
+
+// Names that sanitise to the same ident are numbered in declaration order.
+export declare class Collide {
+  constructor();
+  data: string;
+  $data: string;
+}
+export interface CollideInit {
+  fooBar: number;
+  foo_bar: number;
+  data?: string;
+  $data?: string;
+}
+export interface MethodCollide {
+  data(): void;
+  $data: string;
+  setFoo(): void;
+  foo: string;
+  call(): void;
+  call(a: string): void;
+  call($a: number): void;
+}
+export interface SetterCollide {
+  setFoo: string;
+  foo: string;
+}
+// A setter numbered around a method takes a number no other property's
+// getter has.
+export declare class SetterNumbers {
+  data: string;
+  $data: string;
+  setData(): void;
+}
+// A read-only property has no setter, so its `set_` name stays free.
+export declare class ReadonlyCollide {
+  readonly value: string;
+  setValue(value: string): void;
+  static readonly level: number;
+  static setLevel(level: number): void;
+}
+export declare function ajax(url: string): void;
+export declare function $ajax(url: string): void;
+export declare function dollar(): void;
+export declare function collideArgs(a: string, $a: number, fooBar: string, foo_bar: number): void;

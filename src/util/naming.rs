@@ -96,6 +96,38 @@ pub fn to_snake_case(name: &str) -> String {
     out
 }
 
+/// The Rust identifier a JS name binds under: its `snake_case` form with
+/// the characters a Rust identifier can't hold removed (`$data` → `data`,
+/// `@cf/model` → `cfmodel`). Keywords and a leading digit are left to
+/// `make_ident`, after prefixes like `set_` are composed.
+pub(crate) fn snake_ident(js_name: &str) -> String {
+    ident_chars(&to_snake_case(js_name))
+}
+
+/// The characters of `name` a Rust identifier can hold.
+pub(crate) fn ident_chars(name: &str) -> String {
+    name.chars()
+        .filter(|c| c.is_alphanumeric() || *c == '_')
+        .collect()
+}
+
+/// The order in which JS names claim the Rust name they convert to: a name
+/// spelled the same in Rust (`ajax`, `foo_bar`) first, then one that only
+/// changes case (`fooBar`), then one that loses or spells out characters
+/// (`$ajax`, `[Symbol.iterator]`). The binding whose JS name reads as the
+/// Rust name keeps it, whatever the declaration order.
+pub(crate) fn naming_priority(js_name: &str, rust_name: &str) -> u8 {
+    if js_name == rust_name {
+        0
+    } else if js_name.chars().any(char::is_alphanumeric)
+        && js_name.chars().all(|c| c.is_alphanumeric() || c == '_')
+    {
+        1
+    } else {
+        2
+    }
+}
+
 /// Convert a JS identifier to a Rust PascalCase name (for types, enums).
 pub fn to_pascal_case(name: &str) -> String {
     match symbol_words(name) {
@@ -190,6 +222,9 @@ pub enum Suffix {
     Snake,
     /// `Foo2`, `Foo3`, …: a further synthesised PascalCase type.
     Pascal,
+    /// `a2`, `a3`, …: a further parameter. wasm-bindgen splits each
+    /// parameter `a` into `a_1` … `a_4` in the code it generates.
+    Param,
 }
 
 /// The names claimed in one Rust scope.
@@ -203,6 +238,7 @@ pub enum Suffix {
 #[derive(Debug, Default, Clone)]
 pub struct LocalScope {
     claimed: HashSet<String>,
+    reserved: HashSet<String>,
 }
 
 impl LocalScope {
@@ -214,6 +250,7 @@ impl LocalScope {
     {
         Self {
             claimed: names.into_iter().map(Into::into).collect(),
+            reserved: HashSet::new(),
         }
     }
 
@@ -232,6 +269,23 @@ impl LocalScope {
         self.claimed.remove(name);
     }
 
+    /// Claim `name` for a declaration emitted later, which frees it again
+    /// with [`Self::unreserve`] just before declaring it. Until then no
+    /// other name, a derived `try_` one included, can take it.
+    pub fn reserve(&mut self, name: impl Into<String>) {
+        let name = name.into();
+        self.claimed.insert(name.clone());
+        self.reserved.insert(name);
+    }
+
+    /// Free a [`Self::reserve`]d name for its declaration to claim. Only the
+    /// first call frees it, so a repeated declaration is still numbered.
+    pub fn unreserve(&mut self, name: &str) {
+        if self.reserved.remove(name) {
+            self.claimed.remove(name);
+        }
+    }
+
     /// Claim `candidate`, or the first free respelling of it under
     /// `suffix`, and return the name claimed.
     pub fn declare(&mut self, candidate: &str, suffix: Suffix) -> String {
@@ -247,7 +301,7 @@ impl LocalScope {
         for n in 2u32.. {
             let name = match suffix {
                 Suffix::Trailing | Suffix::Snake => format!("{candidate}_{n}"),
-                Suffix::Pascal => format!("{candidate}{n}"),
+                Suffix::Pascal | Suffix::Param => format!("{candidate}{n}"),
             };
             if self.claim(name.clone()) {
                 return name;
@@ -304,6 +358,35 @@ mod tests {
         assert_eq!(to_enum_variant("_"), "Underscore");
         assert_eq!(to_enum_variant(""), "Empty");
         assert_eq!(to_snake_case("☃"), "☃");
+    }
+
+    #[test]
+    fn reserved_names_are_freed_once() {
+        let mut scope = LocalScope::default();
+        scope.reserve("data");
+        assert_eq!(scope.declare("data", Suffix::Snake), "data_2");
+        scope.unreserve("data");
+        assert_eq!(scope.declare("data", Suffix::Snake), "data");
+        scope.unreserve("data");
+        assert_eq!(scope.declare("data", Suffix::Snake), "data_3");
+    }
+
+    #[test]
+    fn naming_priority_prefers_names_spelled_as_in_rust() {
+        assert_eq!(naming_priority("foo_bar", "foo_bar"), 0);
+        assert_eq!(naming_priority("type", "type"), 0);
+        assert_eq!(naming_priority("fooBar", "foo_bar"), 1);
+        assert_eq!(naming_priority("_", "underscore"), 2);
+        assert_eq!(naming_priority("$fooBar", "foo_bar"), 2);
+        assert_eq!(naming_priority("[Symbol.iterator]", "iterator"), 2);
+    }
+
+    #[test]
+    fn snake_ident_strips_invalid_characters() {
+        assert_eq!(snake_ident("$data"), "data");
+        assert_eq!(snake_ident("@cf/model"), "cfmodel");
+        assert_eq!(snake_ident("fooBar"), "foo_bar");
+        assert_eq!(snake_ident("$$"), "dollar_dollar");
     }
 
     #[test]

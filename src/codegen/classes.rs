@@ -34,11 +34,12 @@ use crate::codegen::signatures::{
 };
 use crate::codegen::typemap::{to_return_type, CodegenContext, TypePosition};
 use crate::ir::{
-    ClassDecl, GetterMember, InterfaceClassification, InterfaceDecl, Member, ModuleContext,
-    SetterMember, StaticGetterMember, StaticSetterMember, TypeRef,
+    ClassDecl, GetterMember, InterfaceClassification, InterfaceDecl, Member, MethodMember,
+    ModuleContext, SetterMember, StaticGetterMember, StaticMethodMember, StaticSetterMember,
+    TypeRef,
 };
 use crate::parse::scope::ScopeId;
-use crate::util::naming::{to_snake_case, LocalScope, Suffix};
+use crate::util::naming::{naming_priority, to_snake_case, LocalScope, Suffix};
 
 /// Configuration for generating a class-like extern block.
 pub(crate) struct ClassConfig<'a> {
@@ -57,6 +58,8 @@ pub(crate) struct ClassConfig<'a> {
     is_abstract: bool,
     /// Members to generate.
     members: Vec<Member>,
+    /// See [`member_names`].
+    member_names: MemberNames,
     /// Type parameters declared on the type itself (`<T, U, …>`).
     /// Rendered as `<T: JsGeneric, …>` on the `pub type` decl and
     /// propagated to every `this: &Type<T, …>` reference inside the
@@ -69,7 +72,144 @@ pub(crate) struct ClassConfig<'a> {
     scope: ScopeId,
 }
 
+/// What a member base names; instance and static members of the same JS
+/// name are distinct members of one extern block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+enum MemberKind {
+    Property,
+    StaticProperty,
+    Method,
+    StaticMethod,
+}
+
+type MemberKey = (MemberKind, String);
+
+/// The names a type's members are emitted under; see [`member_names`].
+#[derive(Default)]
+struct MemberNames {
+    /// The snake_case base of each property and method: a method's and a
+    /// getter's own name, and a dictionary's factory parameter.
+    bases: HashMap<MemberKey, String>,
+    /// The `set_` name of each property that has a setter, which a
+    /// dictionary's builder method follows.
+    setters: HashMap<MemberKey, String>,
+}
+
+/// Name a type's properties and methods up front.
+///
+/// A property's getter, `set_` setter, and a dictionary's factory parameter
+/// and builder method are named in separate passes, so names that convert
+/// alike (`data` / `$data`, `fooBar` / `foo_bar`) are made distinct here,
+/// once. Declared names claim first, in [`naming_priority`] order after the
+/// constructor's `new`, then the setters' derived names: `set_` plus the
+/// property's base (`$data` → `data_2` / `set_data_2`), numbered on its own
+/// when a declared name already has it (`setFoo()` keeps `set_foo` and
+/// property `foo`'s setter becomes `set_foo_2`).
+fn member_names(members: &[Member], is_abstract: bool) -> MemberNames {
+    let mut keyed: Vec<(MemberKind, &str)> = members
+        .iter()
+        .filter_map(|member| {
+            Some(match member {
+                Member::Getter(GetterMember { js_name, .. })
+                | Member::Setter(SetterMember { js_name, .. }) => (MemberKind::Property, js_name),
+                Member::StaticGetter(StaticGetterMember { js_name, .. })
+                | Member::StaticSetter(StaticSetterMember { js_name, .. }) => {
+                    (MemberKind::StaticProperty, js_name)
+                }
+                Member::Method(MethodMember { js_name, .. }) => (MemberKind::Method, js_name),
+                Member::StaticMethod(StaticMethodMember { js_name, .. }) => {
+                    (MemberKind::StaticMethod, js_name)
+                }
+                _ => return None,
+            })
+        })
+        .map(|(kind, js_name)| (kind, js_name.as_str()))
+        .collect();
+    keyed.sort_by_key(|(_, js_name)| naming_priority(js_name, &member_snake(js_name)));
+
+    let mut scope = LocalScope::default();
+    if !is_abstract && members.iter().any(|m| matches!(m, Member::Constructor(_))) {
+        scope.claim("new");
+    }
+    let mut names = MemberNames::default();
+    for (kind, js_name) in &keyed {
+        names
+            .bases
+            .entry((*kind, js_name.to_string()))
+            .or_insert_with(|| {
+                let base = scope.declare(&member_snake(js_name), Suffix::Snake);
+                // A keyword is declared under its public spelling (`type_`).
+                scope.claim(public_rust_name(&base));
+                base
+            });
+    }
+    // Every setter that can keep `set_<base>` does before any is numbered,
+    // so `set_data_2` can't go to `data`'s setter while `data_2` has one.
+    let mut numbered = Vec::new();
+    for member in members {
+        let key = match member {
+            Member::Setter(SetterMember { js_name, .. }) => (MemberKind::Property, js_name),
+            Member::StaticSetter(StaticSetterMember { js_name, .. }) => {
+                (MemberKind::StaticProperty, js_name)
+            }
+            _ => continue,
+        };
+        let key = (key.0, key.1.clone());
+        if names.setters.contains_key(&key) || numbered.contains(&key) {
+            continue;
+        }
+        let setter = format!("set_{}", names.bases[&key]);
+        if scope.claim(setter.clone()) {
+            names.setters.insert(key, setter);
+        } else {
+            numbered.push(key);
+        }
+    }
+    for key in numbered {
+        let setter = scope.declare(&format!("set_{}", names.bases[&key]), Suffix::Snake);
+        names.setters.insert(key, setter);
+    }
+    names
+}
+
+fn member_snake(js_name: &str) -> String {
+    super::signatures::base_rust_name(js_name, SignatureKind::Method)
+}
+
 impl ClassConfig<'_> {
+    /// The base a member is named from; see [`member_names`].
+    fn member_base(&self, kind: MemberKind, js_name: &str) -> String {
+        self.member_names
+            .bases
+            .get(&(kind, js_name.to_string()))
+            .cloned()
+            .unwrap_or_else(|| member_snake(js_name))
+    }
+
+    /// A property's setter name; see [`member_names`].
+    fn setter_name(&self, kind: MemberKind, js_name: &str) -> String {
+        self.member_names
+            .setters
+            .get(&(kind, js_name.to_string()))
+            .cloned()
+            .unwrap_or_else(|| format!("set_{}", self.member_base(kind, js_name)))
+    }
+
+    /// An extern block's names with every member's own names reserved, so
+    /// emitting members in declaration order still gives each the name
+    /// [`member_names`] chose.
+    fn reserved_names(&self) -> LocalScope {
+        let mut names = LocalScope::default();
+        for base in self.member_names.bases.values() {
+            names.reserve(base.clone());
+            names.reserve(public_rust_name(base));
+        }
+        for setter in self.member_names.setters.values() {
+            names.reserve(setter.clone());
+        }
+        names
+    }
+
     /// The enum a property's setter shares with its getter; see
     /// [`super::typemap::setter_enum`].
     fn setter_enum(&self, js_name: &str, ty: &TypeRef) -> Option<super::typemap::SetterEnum> {
@@ -136,6 +276,7 @@ impl<'a> ClassConfig<'a> {
             js_namespace: Vec::new(),
             is_abstract: decl.is_abstract,
             members: decl.members.clone(),
+            member_names: member_names(&decl.members, decl.is_abstract),
             type_params: decl.type_params.clone(),
             cgctx,
             scope,
@@ -163,6 +304,7 @@ impl<'a> ClassConfig<'a> {
             js_namespace: Vec::new(),
             is_abstract: false,
             members: decl.members.clone(),
+            member_names: member_names(&decl.members, false),
             type_params: decl.type_params.clone(),
             cgctx,
             scope,
@@ -193,6 +335,7 @@ impl<'a> ClassConfig<'a> {
             js_namespace: Vec::new(),
             is_abstract: false,
             members: decl.members.clone(),
+            member_names: member_names(&decl.members, false),
             type_params: decl.type_params.clone(),
             cgctx,
             scope,
@@ -541,10 +684,11 @@ pub(crate) fn generate_dictionary_factory_with_passes(
         let mut setter_used = LocalScope::default();
         let setter_overloads = [&[setter_param][..]];
         let void = crate::ir::TypeRef::Void;
+        let setter_name = config.setter_name(MemberKind::Property, &g.js_name);
         build_signatures(
             &CallableSpec {
                 js_name: &g.js_name,
-                rust_name: None,
+                rust_name: Some(&setter_name),
                 kind: SignatureKind::Setter,
                 overloads: &setter_overloads,
                 return_type: &void,
@@ -601,7 +745,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
     let build_field_dims = |required: &[&crate::ir::GetterMember]| -> Vec<FieldDim> {
         let mut field_dims: Vec<FieldDim> = Vec::new();
         for g in required {
-            let param_name = to_snake_case(&g.js_name);
+            let param_name = config.member_base(MemberKind::Property, &g.js_name);
             let setters = resolve_setter_sigs(g);
             if setters.is_empty() {
                 continue;
@@ -1087,9 +1231,13 @@ pub(crate) fn generate_dictionary_factory_with_passes(
     // (Empty when `!emit_builder`, since there's nothing to chain.)
     let mut builder_methods: Vec<TokenStream> = Vec::new();
     for g in &optional_getters {
+        let base = config.member_base(MemberKind::Property, &g.js_name);
+        let setter_name = config.setter_name(MemberKind::Property, &g.js_name);
         for sig in resolve_setter_sigs(g) {
-            let builder_method_name = sig.rust_name.strip_prefix("set_").unwrap_or(&sig.rust_name);
-            let builder_method_name = public_rust_name(builder_method_name);
+            // The builder has no methods of its own to avoid, so it follows
+            // the getter's name, with the setter's expansion suffix.
+            let suffix = sig.rust_name.strip_prefix(&setter_name).unwrap_or_default();
+            let builder_method_name = public_rust_name(&format!("{base}{suffix}"));
             let method_ident = super::typemap::make_ident(&builder_method_name);
             let setter_ident = super::typemap::make_ident(&sig.rust_name);
             // Mirrors `generate_setter`: an `ArrayBufferView` param is a
@@ -1153,6 +1301,13 @@ pub(crate) fn generate_dictionary_factory_with_passes(
     }
 }
 
+/// Free a member base reserved by [`ClassConfig::reserved_names`], in both
+/// its spellings, for its member to declare.
+fn unreserve_base(names: &mut LocalScope, base: &str) {
+    names.unreserve(base);
+    names.unreserve(&public_rust_name(base));
+}
+
 /// Build the full `#[wasm_bindgen] extern "C" { ... }` block.
 ///
 /// All naming happens through a single `names` set that spans the entire
@@ -1168,7 +1323,7 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
     use std::collections::HashMap;
 
     let mut items = Vec::new();
-    let mut names = LocalScope::default();
+    let mut names = config.reserved_names();
 
     // Pre-group methods/statics/constructors by js_name.
     // We iterate config.members in declaration order, so the first occurrence of
@@ -1279,10 +1434,12 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
                 let throws = group.first().map(|m| &m.throws).unwrap_or(&empty_throws);
                 // The method's own body scope holds its `<T, ...>`.
                 let method_scope = group[0].body_scope;
+                let base = config.member_base(MemberKind::Method, &m.js_name);
+                unreserve_base(&mut names, &base);
                 let sigs = build_signatures(
                     &CallableSpec {
                         js_name: &m.js_name,
-                        rust_name: None,
+                        rust_name: Some(&base),
                         kind: SignatureKind::Method,
                         overloads: &overloads,
                         return_type,
@@ -1311,10 +1468,12 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
                 let empty_throws = crate::ir::Throws::None;
                 let throws = group.first().map(|m| &m.throws).unwrap_or(&empty_throws);
                 let method_scope = group[0].body_scope;
+                let base = config.member_base(MemberKind::StaticMethod, &m.js_name);
+                unreserve_base(&mut names, &base);
                 let sigs = build_signatures(
                     &CallableSpec {
                         js_name: &m.js_name,
-                        rust_name: None,
+                        rust_name: Some(&base),
                         kind: SignatureKind::StaticMethod,
                         overloads: &overloads,
                         return_type,
@@ -1331,15 +1490,23 @@ pub(crate) fn generate_extern_block(config: &ClassConfig) -> TokenStream {
                 }
             }
             Member::Getter(g) => {
+                unreserve_base(
+                    &mut names,
+                    &config.member_base(MemberKind::Property, &g.js_name),
+                );
                 items.push(generate_getter(config, g, &mut names));
             }
             Member::Setter(s) => {
+                names.unreserve(&config.setter_name(MemberKind::Property, &s.js_name));
                 items.extend(generate_setter(config, s, &mut names));
             }
             Member::StaticGetter(g) => {
+                let base = config.member_base(MemberKind::StaticProperty, &g.js_name);
+                unreserve_base(&mut names, &base);
                 items.push(generate_static_getter(config, g, &mut names));
             }
             Member::StaticSetter(s) => {
+                names.unreserve(&config.setter_name(MemberKind::StaticProperty, &s.js_name));
                 items.extend(generate_static_setter(config, s, &mut names));
             }
             Member::IndexSignature(_) | Member::Constructor(_) => {
@@ -1663,7 +1830,7 @@ fn generate_getter(
     let this_type = super::typemap::make_ident(&config.effective_rust_name());
     let doc = super::doc_tokens(&getter.doc);
 
-    let candidate = public_rust_name(&to_snake_case(&getter.js_name));
+    let candidate = public_rust_name(&config.member_base(MemberKind::Property, &getter.js_name));
     let rust_name = names.declare(&candidate, Suffix::Snake);
     let rust_ident = super::typemap::make_ident(&rust_name);
 
@@ -1769,10 +1936,11 @@ fn generate_setter(
 
     let overloads = [&[param][..]];
     let void = crate::ir::TypeRef::Void;
+    let setter_name = config.setter_name(MemberKind::Property, &setter.js_name);
     let sigs = build_signatures(
         &CallableSpec {
             js_name: &setter.js_name,
-            rust_name: None,
+            rust_name: Some(&setter_name),
             kind: SignatureKind::Setter,
             overloads: &overloads,
             return_type: &void,
@@ -1836,7 +2004,8 @@ fn generate_static_getter(
     let class_ident = super::typemap::make_ident(&config.effective_rust_name());
     let doc = super::doc_tokens(&getter.doc);
 
-    let candidate = public_rust_name(&to_snake_case(&getter.js_name));
+    let candidate =
+        public_rust_name(&config.member_base(MemberKind::StaticProperty, &getter.js_name));
     let rust_name = names.declare(&candidate, Suffix::Snake);
     let rust_ident = super::typemap::make_ident(&rust_name);
 
@@ -1901,10 +2070,11 @@ fn generate_static_setter(
 
     let overloads = [&[param][..]];
     let void = crate::ir::TypeRef::Void;
+    let setter_name = config.setter_name(MemberKind::StaticProperty, &setter.js_name);
     let sigs = build_signatures(
         &CallableSpec {
             js_name: &setter.js_name,
-            rust_name: None,
+            rust_name: Some(&setter_name),
             kind: SignatureKind::StaticSetter,
             overloads: &overloads,
             return_type: &void,
