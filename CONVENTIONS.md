@@ -146,16 +146,18 @@ the copy shape instead:
   `slice = "array"`, after resolving aliases, literal unions and numeric
   enums.
 * Under [per-monomorphization](#in-scope-generic-type-parameters), a
-  `T[]` whose element is a type parameter gets `slice = "array"` too:
-  wasm-bindgen resolves the mode per instantiation, so `T = f64` reaches
-  JS as an `Array` rather than a view, and every non-numeric `T` is
-  unaffected.
+  `T[]` whose element is a type parameter gets `slice = "array"` at the
+  *function* level: wasm-bindgen resolves the mode per instantiation, so
+  `T = f64` reaches JS as an `Array` rather than a view. An inherited
+  mode drops by shape for every non-numeric `T`, where a per-argument
+  one would be a hard error — the one place ts-gen uses the fn level.
 * A typed slice from a [typed-array union](#typed-array-unions) gets
   `slice = "copy"`.
 
 ```rs
 pub fn set_weights(#[wasm_bindgen(slice = "array")] weights: &[f64]);
-pub fn generic<T>(#[wasm_bindgen(slice = "array")] values: &[T]) -> String; // per-mono
+#[wasm_bindgen(slice = "array")]
+pub fn generic<T>(values: &[T]) -> String; // per-mono
 ```
 
 Every other slice takes no mode, as the modes only act on numeric
@@ -166,10 +168,9 @@ element by element. Variadic rest parameters (`&[JsValue]`) don't take
 one either.
 
 The user-facing Rust signature is unchanged — only the JS-side wire
-format changes. The mode goes on the argument rather than the
-function: a fn-level mode is inherited by every slice parameter of
-the binding, which would also turn a typed-array union's typed copy
-(see below) into an `Array` when the two share a signature.
+format changes. Modes go on the argument, except for the mono case
+above. A per-argument mode overrides the fn-level one, so a typed copy
+sharing a signature with a mono `T[]` stays a copy.
 
 ### `{@slice}` JSDoc hints
 
