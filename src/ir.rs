@@ -493,14 +493,29 @@ pub struct Module {
     pub types: Vec<TypeId>,
     /// Optional library name from `--lib-name`.
     pub lib_name: Option<String>,
-    /// Builtin (root) scope id.
-    pub builtin_scope: ScopeId,
+    /// The global scope: TypeScript's `globals`, the exports of the
+    /// `globalThis` namespace. It holds the built-in types and the globals
+    /// of every file, merged, and is consulted last in name resolution.
+    pub global_scope: ScopeId,
     /// Input file scope ids (for scope-based codegen iteration).
     pub file_scopes: Vec<ScopeId>,
-    /// Canonical source-file path for each input file scope. Used by
-    /// codegen to decide whether a declaration's owning file is in the
-    /// `--export` set when filtering the output surface.
-    pub file_scope_paths: HashMap<ScopeId, std::path::PathBuf>,
+    /// The globals each input file declares, by canonical path: a script's
+    /// top-level declarations and a module's `declare global` blocks. A
+    /// file without `--lib-name` has no specifier, so it is read as a
+    /// script whether or not it has imports or exports.
+    pub file_roots: Vec<(std::path::PathBuf, Root)>,
+    /// The modules the input files declare, by specifier: a `--lib-name`
+    /// module file and each `declare module` body.
+    pub module_roots: Vec<(String, Root)>,
+}
+
+/// An export map, and the scope whose declarations its local names refer
+/// to. A file's globals bind in the global scope, where every file's
+/// declarations of a name have merged.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Root {
+    pub exports: ScopeId,
+    pub bindings: ScopeId,
 }
 
 #[derive(Clone, Debug)]
@@ -511,10 +526,6 @@ pub struct TypeDeclaration {
     pub doc: Option<String>,
     /// The scope this declaration was defined in (for type reference resolution).
     pub scope_id: crate::parse::scope::ScopeId,
-    /// Whether this declaration was explicitly exported.
-    /// In script mode, all declarations are implicitly public.
-    /// In module mode, only exported declarations are public.
-    pub exported: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -537,6 +548,15 @@ pub enum TypeKind {
 
 // ─── Class ───────────────────────────────────────────────────────────
 
+/// A type an `extends` clause names, with the body scope of the declaration
+/// whose clause it is, where it resolves: a merged declaration's parents
+/// can come from declarations in different scopes.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Heritage {
+    pub type_ref: TypeRef,
+    pub scope: crate::parse::scope::ScopeId,
+}
+
 #[derive(Clone, Debug)]
 
 pub struct ClassDecl {
@@ -545,7 +565,7 @@ pub struct ClassDecl {
     pub js_name: String,
     pub type_params: Vec<TypeParam>,
     /// Immediate parent class.
-    pub extends: Option<TypeRef>,
+    pub extends: Option<Heritage>,
     pub implements: Vec<TypeRef>,
     pub is_abstract: bool,
     pub members: Vec<Member>,
@@ -566,8 +586,12 @@ pub struct InterfaceDecl {
     pub name: String,
     pub js_name: String,
     pub type_params: Vec<TypeParam>,
-    pub extends: Vec<TypeRef>,
+    pub extends: Vec<Heritage>,
     pub members: Vec<Member>,
+    /// Its construct signatures (`new (…): T`), overloads in declaration
+    /// order. Only a constructor `var` the interface types binds them, as
+    /// its class's constructors.
+    pub construct: Vec<ConstructorMember>,
     /// Classification determined during assembly.
     pub classification: InterfaceClassification,
     /// Scope inside this interface's body — see
@@ -788,6 +812,11 @@ pub struct FunctionDecl {
 pub struct FunctionOverload {
     pub params: Vec<Param>,
     pub return_type: TypeRef,
+    /// Scope inside this overload's declaration, holding its own type
+    /// parameters.
+    pub body_scope: crate::parse::scope::ScopeId,
+    pub throws: Throws,
+    pub doc: Option<String>,
 }
 
 // ─── Variable ────────────────────────────────────────────────────────
@@ -842,6 +871,10 @@ pub enum Member {
 #[derive(Clone, Debug)]
 
 pub struct GetterMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     /// Original JS property name (source of truth for naming).
     pub js_name: String,
     /// Return type of the getter.
@@ -857,6 +890,10 @@ pub struct GetterMember {
 #[derive(Clone, Debug)]
 
 pub struct SetterMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     /// Original JS property name (source of truth for naming).
     pub js_name: String,
     /// Parameter type of the setter.
@@ -888,6 +925,10 @@ pub struct MethodMember {
 #[derive(Clone, Debug)]
 
 pub struct ConstructorMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     pub params: Vec<Param>,
     pub doc: Option<String>,
     /// Failure-mode info from `@throws` — see [`Throws`].
@@ -901,6 +942,10 @@ pub struct ConstructorMember {
 #[derive(Clone, Debug)]
 
 pub struct IndexSigMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     pub key_type: TypeRef,
     pub value_type: TypeRef,
     pub readonly: bool,
@@ -912,6 +957,10 @@ pub struct IndexSigMember {
 #[derive(Clone, Debug)]
 
 pub struct StaticGetterMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     /// Original JS property name (source of truth for naming).
     pub js_name: String,
     pub type_ref: TypeRef,
@@ -924,6 +973,10 @@ pub struct StaticGetterMember {
 #[derive(Clone, Debug)]
 
 pub struct StaticSetterMember {
+    /// The scope its types resolve in: the body scope of the declaration it
+    /// is written in, which a merged declaration's other members needn't
+    /// share.
+    pub scope: crate::parse::scope::ScopeId,
     /// Original JS property name (source of truth for naming).
     pub js_name: String,
     pub type_ref: TypeRef,
@@ -957,31 +1010,26 @@ pub struct TypeRegistry {
     /// scopes are different declarations, so a module's `interface C`
     /// doesn't change a global `interface C` + `var C` class merge.
     pub types: HashMap<(crate::parse::scope::ScopeId, String), TypeInfo>,
-    /// Body scope of each `declare module "x"` in the file. Repeated blocks
-    /// for one specifier share a scope, as TypeScript merges them.
+    /// The exports scope of each module the file has a `declare module "x"`
+    /// block of, shared with every other file's blocks of it.
     pub module_scopes: HashMap<String, crate::parse::scope::ScopeId>,
+    /// Each `declare module "x"` block's own scope, holding its imports and
+    /// locals, with its specifier, by the block's span start.
+    pub module_blocks: HashMap<u32, (String, crate::parse::scope::ScopeId)>,
+    /// Each namespace declaration's own scope, by the declaration's span
+    /// start. Its `exports` is the namespace's member scope.
+    pub namespace_blocks: HashMap<u32, crate::parse::scope::ScopeId>,
     /// Member scope of each namespace declared outside the `declare module
     /// "x"` that assigns it with `export =`, → `"x"`. Such a namespace is
     /// the module, so it is populated into the module rather than as a
     /// global.
     pub assigned_namespaces: HashMap<crate::parse::scope::ScopeId, String>,
-    /// Public names given by source-less `export { local as public }`,
-    /// keyed by the Phase 1 `TypeId` that `local` binds directly in the
-    /// exporting scope. A same-named declaration in any other scope is a
-    /// different binding and keeps its own name.
-    pub export_names: HashMap<crate::context::TypeId, Vec<String>>,
-    /// `declare var X: XConstructor` pairs, `(scope, X)` → the scope
-    /// declaring `XConstructor` and its name. The interface supplies the
-    /// class constructor and statics and is not emitted as a type of its own.
-    /// In source order, so that of two vars sharing an interface the first
-    /// consistently takes its statics.
-    pub ctor_interfaces: indexmap::IndexMap<
-        (crate::parse::scope::ScopeId, String),
-        (crate::parse::scope::ScopeId, String),
-    >,
     /// Constructor-shaped variables whose name a type alias in the same
     /// scope takes as the type. The alias keeps the binding.
     pub alias_constructors: std::collections::HashSet<(crate::parse::scope::ScopeId, String)>,
+    /// Key of the export map listing the globals the file declares, if it
+    /// declares any (see [`Module::file_roots`]).
+    pub globals: Option<crate::parse::scope::ScopeId>,
 }
 
 impl TypeRegistry {
@@ -1000,13 +1048,6 @@ impl TypeRegistry {
         self.types
             .get_mut(&(scope, name.to_string()))
             .map(|info| &mut info.kind)
-    }
-
-    /// Whether `name` in `scope` is a `var` whose class constructor comes
-    /// from a `*Constructor` interface.
-    pub fn has_ctor_interface(&self, scope: crate::parse::scope::ScopeId, name: &str) -> bool {
-        self.ctor_interfaces
-            .contains_key(&(scope, name.to_string()))
     }
 }
 

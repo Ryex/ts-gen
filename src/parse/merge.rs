@@ -63,27 +63,38 @@ pub fn var_declarator_name(declarator: &VariableDeclarator<'_>) -> Option<String
 /// Extract constructor, static methods, and static properties from the
 /// static-side object type of a class: an inline `{ new(...): T; ... }`
 /// literal or a `*Constructor` interface body.
+/// A construct signature (`new (…): T`) as the constructor of the class it
+/// constructs.
+pub fn convert_construct_signature(
+    ctor: &oxc_ast::ast::TSConstructSignatureDeclaration<'_>,
+    parent_scope: ScopeId,
+    ctx: &mut ParseCtx<'_, '_>,
+) -> ConstructorMember {
+    let params = convert_formal_params_scoped(&ctor.params, parent_scope, ctx);
+    let (doc, info) = match ctx.docs.info_for_span(ctor.span.start) {
+        Some((d, i)) => (Some(d), i),
+        None => (None, crate::parse::docs::JsDocInfo::default()),
+    };
+    ConstructorMember {
+        scope: parent_scope,
+        params,
+        doc,
+        throws: info.throws(),
+    }
+}
+
 pub fn extract_var_members(
     members: &[TSSignature<'_>],
     parent_scope: ScopeId,
     ctx: &mut ParseCtx<'_, '_>,
-) -> (Option<ConstructorMember>, Vec<Member>) {
-    let mut constructor = None;
+) -> (Vec<ConstructorMember>, Vec<Member>) {
+    let mut constructors = Vec::new();
     let mut static_members = Vec::new();
 
     for member in members {
         match member {
             TSSignature::TSConstructSignatureDeclaration(ctor) => {
-                let params = convert_formal_params_scoped(&ctor.params, parent_scope, ctx);
-                let (doc, info) = match ctx.docs.info_for_span(ctor.span.start) {
-                    Some((d, i)) => (Some(d), i),
-                    None => (None, crate::parse::docs::JsDocInfo::default()),
-                };
-                constructor = Some(ConstructorMember {
-                    params,
-                    doc,
-                    throws: info.throws(),
-                });
+                constructors.push(convert_construct_signature(ctor, parent_scope, ctx));
             }
             TSSignature::TSPropertySignature(prop) => {
                 let js_name = match property_key_name(&prop.key) {
@@ -100,12 +111,14 @@ pub fn extract_var_members(
                     .map(|ann| convert_ts_type_scoped(&ann.type_annotation, parent_scope, ctx))
                     .unwrap_or(TypeRef::Any);
                 static_members.push(Member::StaticGetter(StaticGetterMember {
+                    scope: parent_scope,
                     js_name: js_name.clone(),
                     type_ref: type_ref.clone(),
                     doc,
                 }));
                 if !prop.readonly {
                     static_members.push(Member::StaticSetter(StaticSetterMember {
+                        scope: parent_scope,
                         js_name,
                         type_ref,
                         doc: None,
@@ -152,5 +165,5 @@ pub fn extract_var_members(
         }
     }
 
-    (constructor, static_members)
+    (constructors, static_members)
 }

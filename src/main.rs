@@ -22,8 +22,8 @@ struct Cli {
     /// Rust code.
     ///
     /// Two forms:
-    ///   - File path (e.g. `types/email.d.ts`) — emits that file's
-    ///     **global-scope** declarations.
+    ///   - File path (e.g. `types/email.d.ts`) — emits the globals that
+    ///     file declares.
     ///   - Module specifier (e.g. `cloudflare:email`) — emits that
     ///     module's declarations in a `pub mod` named by the specifier
     ///     (`cloudflare::email`). The `--lib-name` module is emitted at
@@ -211,7 +211,7 @@ fn print_declaration(
             let extends = c
                 .extends
                 .as_ref()
-                .map(|e| format!(" extends {:?}", e))
+                .map(|e| format!(" extends {:?}", e.type_ref))
                 .unwrap_or_default();
             let abstract_ = if c.is_abstract { " abstract" } else { "" };
             eprintln!(

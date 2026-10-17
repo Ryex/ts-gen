@@ -57,6 +57,10 @@ pub fn convert_class_decl(
         .iter()
         .flat_map(|elem| convert_class_element(elem, Some(&name), body_scope, ctx))
         .collect();
+    let extends = extends.map(|type_ref| ir::Heritage {
+        type_ref,
+        scope: body_scope,
+    });
 
     Some(ir::ClassDecl {
         name,
@@ -114,17 +118,33 @@ pub fn interface_from_signatures(
     let js_name = name.clone();
     let parent = name.clone();
     let body_scope = create_body_scope(&type_params, parent_scope, ctx);
-    let members: Vec<ir::Member> = signatures
-        .iter()
-        .flat_map(|sig| convert_ts_signature(sig, Some(&parent), body_scope, ctx))
-        .collect();
+    let mut construct = Vec::new();
+    let mut members: Vec<ir::Member> = Vec::new();
+    for sig in signatures {
+        match sig {
+            ast::TSSignature::TSConstructSignatureDeclaration(ctor) => {
+                construct.push(crate::parse::merge::convert_construct_signature(
+                    ctor, body_scope, ctx,
+                ));
+            }
+            sig => members.extend(convert_ts_signature(sig, Some(&parent), body_scope, ctx)),
+        }
+    }
     let classification = classify_interface(&members);
+    let extends = extends
+        .into_iter()
+        .map(|type_ref| ir::Heritage {
+            type_ref,
+            scope: body_scope,
+        })
+        .collect();
     ir::InterfaceDecl {
         name,
         js_name,
         type_params,
         extends,
         members,
+        construct,
         classification,
         body_scope,
     }

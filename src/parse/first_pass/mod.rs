@@ -15,7 +15,7 @@ mod populate;
 
 // Re-export public entry points.
 pub use collect::collect_type_names;
-pub use populate::{populate_declarations, NamespaceMembers};
+pub use populate::{populate_declarations, NamespaceMembers, Populated, StaticSides};
 
 // ─── Script vs Module Detection ─────────────────────────────────────
 
@@ -53,6 +53,16 @@ pub fn file_context(program: &ast::Program<'_>, lib_name: Option<&str>) -> ir::M
 }
 
 // ─── Shared Helpers ─────────────────────────────────────────────────
+
+/// The Rust name of the binding `local` exported as `public`. A default
+/// export has no name of its own, so it keeps the local one.
+pub(crate) fn rust_name<'n>(local: &'n str, public: &'n str) -> &'n str {
+    if public == "default" {
+        local
+    } else {
+        public
+    }
+}
 
 /// Whether a declaration block decides its exports explicitly. TypeScript
 /// exports every declaration of a `.d.ts` file, `declare module` body or
@@ -125,6 +135,35 @@ pub fn block_declared_names(stmts: &[ast::Statement<'_>]) -> Vec<String> {
         }
     }
     names
+}
+
+/// The names a `declare module` block declares as exports of the module:
+/// every declaration of a block without an export declaration, else those
+/// with an `export` modifier. TypeScript's binder puts these in the module
+/// symbol's exports, which every block of the module shares, and the rest
+/// of the block's declarations, with its imports, in the block's locals.
+pub fn block_module_exports(stmts: &[ast::Statement<'_>]) -> Vec<String> {
+    if !block_exports_explicitly(stmts) {
+        return block_implicit_exports(stmts);
+    }
+    let mut names = Vec::new();
+    for stmt in stmts {
+        if let ast::Statement::ExportDeclaration(export) = stmt {
+            declaration_names(&export.declaration, &mut names);
+        }
+    }
+    names
+}
+
+/// The names a block exports when it doesn't decide its exports explicitly:
+/// its own declarations, except that an `export default` declaration's
+/// local name is exported only as `default`.
+pub fn block_implicit_exports(stmts: &[ast::Statement<'_>]) -> Vec<String> {
+    stmts
+        .iter()
+        .filter(|stmt| !matches!(stmt, ast::Statement::ExportDefaultDeclaration(_)))
+        .flat_map(|stmt| block_declared_names(std::slice::from_ref(stmt)))
+        .collect()
 }
 
 fn statement_names(stmt: &ast::Statement<'_>, names: &mut Vec<String>) {
@@ -202,6 +241,9 @@ fn is_string_literal_union(ts_type: &ast::TSType<'_>) -> bool {
     }
 }
 
+/// Register `name`'s phase 1 placeholder, declared in `scope` and bound in
+/// `bind`, if given.
+#[allow(clippy::too_many_arguments)]
 fn register_type(
     name: &str,
     kind: ir::RegisteredKind,
@@ -210,6 +252,7 @@ fn register_type(
     gctx: &mut crate::context::GlobalContext,
     scope: ScopeId,
     exported: bool,
+    bind: Option<ScopeId>,
 ) {
     registry.types.insert(
         (scope, name.to_string()),
@@ -240,6 +283,7 @@ fn register_type(
             })
         }
         ir::RegisteredKind::Interface => ir::TypeKind::Interface(ir::InterfaceDecl {
+            construct: Vec::new(),
             name: name_str.clone(),
             js_name: name_str.clone(),
             type_params: vec![],
@@ -296,12 +340,13 @@ fn register_type(
         module_context: ctx.clone(),
         doc: None,
         scope_id: scope,
-        exported,
     });
     if exported {
         gctx.exports.insert(scope, name, name);
     }
-    gctx.scopes.insert(scope, name_str, type_id);
+    if let Some(binds) = bind {
+        gctx.scopes.insert(binds, name_str, type_id);
+    }
 }
 
 /// Register an import as a pending import.
