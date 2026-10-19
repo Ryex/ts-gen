@@ -157,7 +157,9 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn text(this: &Body) -> Result<JsString, JsValue>;
     #[wasm_bindgen(method, catch)]
-    pub async fn json<T: ::wasm_bindgen::JsGeneric>(this: &Body) -> Result<T, JsValue>;
+    pub async fn json<T: ::wasm_bindgen::JsGeneric + ::wasm_bindgen::convert::FromWasmAbi>(
+        this: &Body,
+    ) -> Result<T, JsValue>;
     #[wasm_bindgen(method, catch)]
     pub async fn blob(this: &Body) -> Result<Blob, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "formData")]

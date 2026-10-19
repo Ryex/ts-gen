@@ -103,7 +103,9 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn text(this: &Request) -> Result<JsString, JsValue>;
     #[wasm_bindgen(method, catch)]
-    pub async fn json<T: ::wasm_bindgen::JsGeneric>(this: &Request) -> Result<T, JsValue>;
+    pub async fn json<T: ::wasm_bindgen::JsGeneric + ::wasm_bindgen::convert::FromWasmAbi>(
+        this: &Request,
+    ) -> Result<T, JsValue>;
     #[wasm_bindgen(method, catch)]
     pub async fn blob(this: &Request) -> Result<Blob, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "formData")]
@@ -301,7 +303,9 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn text(this: &Response) -> Result<JsString, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "json")]
-    pub async fn json_2<T: ::wasm_bindgen::JsGeneric>(this: &Response) -> Result<T, JsValue>;
+    pub async fn json_2<T: ::wasm_bindgen::JsGeneric + ::wasm_bindgen::convert::FromWasmAbi>(
+        this: &Response,
+    ) -> Result<T, JsValue>;
     #[wasm_bindgen(method, catch)]
     pub async fn blob(this: &Response) -> Result<Blob, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "formData")]

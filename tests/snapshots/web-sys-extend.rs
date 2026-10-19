@@ -68,7 +68,9 @@ extern "C" {
     pub type ResponseExt;
     #[doc = " Parse the body as JSON and return a typed result."]
     #[wasm_bindgen(method, catch, js_name = "jsonExt")]
-    pub async fn json_ext<T: ::wasm_bindgen::JsGeneric>(this: &ResponseExt) -> Result<T, JsValue>;
+    pub async fn json_ext<T: ::wasm_bindgen::JsGeneric + ::wasm_bindgen::convert::FromWasmAbi>(
+        this: &ResponseExt,
+    ) -> Result<T, JsValue>;
     #[doc = " Get the response body as a Uint8Array."]
     #[wasm_bindgen(method, catch)]
     pub async fn bytes(this: &ResponseExt) -> Result<ArrayBuffer, JsValue>;

@@ -398,7 +398,7 @@ impl<'a> ClassConfig<'a> {
     /// (`<T: ::wasm_bindgen::JsGeneric, …>`) or empty when the type
     /// has no parameters.
     fn type_generics_decl(&self) -> TokenStream {
-        render_generic_bounds(&self.type_param_bounds())
+        render_generic_bounds(&self.type_param_bounds(&[]))
     }
 
     /// Generic declaration for Rust helper impls and builder structs. The
@@ -440,10 +440,19 @@ impl<'a> ClassConfig<'a> {
     /// bounds with method-local bounds (`<T, ...>` collected from
     /// signature types) and ABV widening bounds (`<Tn: TypedArray>`)
     /// into a single `<...>` declaration on each emitted `fn`.
-    fn type_param_bounds(&self) -> Vec<TokenStream> {
+    ///
+    /// A parameter in `promise_params` is bounded by `FromWasmAbi` as well:
+    /// it crosses the ABI as a promise's resolved value.
+    fn type_param_bounds(&self, promise_params: &[String]) -> Vec<TokenStream> {
         self.type_params
             .iter()
-            .map(|tp| CodegenContext::type_param_decl(self.cgctx, &tp.name))
+            .map(|tp| {
+                CodegenContext::type_param_decl(
+                    self.cgctx,
+                    &tp.name,
+                    promise_params.contains(&tp.name),
+                )
+            })
             .collect()
     }
 
@@ -455,7 +464,15 @@ impl<'a> ClassConfig<'a> {
     ///
     /// Names already covered by `self.type_params` are skipped — the
     /// caller composes the two lists in order (type-level first).
-    fn local_generic_bounds(&self, scope: ScopeId, tys: &[&TypeRef]) -> Vec<TokenStream> {
+    ///
+    /// A parameter in `promise_params` is bounded by `FromWasmAbi` as well:
+    /// it crosses the ABI as a promise's resolved value.
+    fn local_generic_bounds(
+        &self,
+        scope: ScopeId,
+        tys: &[&TypeRef],
+        promise_params: &[String],
+    ) -> Vec<TokenStream> {
         let cgctx = match self.cgctx {
             Some(c) => c,
             None => return Vec::new(),
@@ -469,7 +486,7 @@ impl<'a> ClassConfig<'a> {
         names
             .into_iter()
             .filter(|n| !type_level.contains(n.as_str()))
-            .map(|n| CodegenContext::type_param_decl(Some(cgctx), &n))
+            .map(|n| CodegenContext::type_param_decl(Some(cgctx), &n, promise_params.contains(&n)))
             .collect()
     }
 
@@ -1193,7 +1210,7 @@ pub(crate) fn generate_dictionary_factory_with_passes(
             let mut combo_bounds: Vec<TokenStream> = Vec::new();
             let combo_param_tys: Vec<&TypeRef> =
                 plan.value_params.iter().map(|p| &p.type_ref).collect();
-            combo_bounds.extend(config.local_generic_bounds(config.scope, &combo_param_tys));
+            combo_bounds.extend(config.local_generic_bounds(config.scope, &combo_param_tys, &[]));
             combo_bounds.extend(abv_bounds);
             let generics = render_generic_bounds(&combo_bounds);
             let init_calls = &plan.init_calls;
@@ -1693,14 +1710,18 @@ fn generate_type_decl(config: &ClassConfig) -> TokenStream {
 /// only at the dictionary-factory / setter sites that use
 /// [`generate_dictionary_params`].
 fn generic_bounds_for_method(config: &ClassConfig, sig: &FunctionSignature) -> Vec<TokenStream> {
-    let mut bounds = config.type_param_bounds();
+    // A type parameter that is a promise's resolved value crosses the ABI
+    // as that value, so it is bounded by `FromWasmAbi` as well.
     let sig_tys: Vec<&TypeRef> = sig
         .params
         .iter()
         .map(|p| &p.type_ref)
         .chain(std::iter::once(&sig.return_type))
         .collect();
-    bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys));
+    let promise_params =
+        CodegenContext::promise_type_params(&sig_tys, sig.is_async, config.cgctx, sig.body_scope);
+    let mut bounds = config.type_param_bounds(&promise_params);
+    bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys, &promise_params));
     bounds
 }
 
@@ -1945,8 +1966,10 @@ fn generate_getter(
     // `Foo<T>`) compiles. The getter's own return type may also
     // mention bare type params — fold those in alongside type-level
     // ones via `local_generic_bounds`.
-    let mut bounds = config.type_param_bounds();
-    bounds.extend(config.local_generic_bounds(getter.scope, &[&getter.type_ref]));
+    let promise_params =
+        CodegenContext::promise_type_params(&[&getter.type_ref], false, config.cgctx, getter.scope);
+    let mut bounds = config.type_param_bounds(&promise_params);
+    bounds.extend(config.local_generic_bounds(getter.scope, &[&getter.type_ref], &promise_params));
     let fn_generics = render_generic_bounds(&bounds);
     let this_generics = config.type_generics_args();
 
@@ -2042,9 +2065,15 @@ fn generate_setter(
             // first two share a JsGeneric bound; the third uses
             // `js_sys::TypedArray`. Composing them in this order
             // keeps method/getter/setter generics aligned.
-            let mut bounds = config.type_param_bounds();
+            let promise_params = CodegenContext::promise_type_params(
+                &sig.params.iter().map(|p| &p.type_ref).collect::<Vec<_>>(),
+                sig.is_async,
+                config.cgctx,
+                sig.body_scope,
+            );
+            let mut bounds = config.type_param_bounds(&promise_params);
             let sig_tys: Vec<&TypeRef> = sig.params.iter().map(|p| &p.type_ref).collect();
-            bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys));
+            bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys, &promise_params));
             bounds.extend(abv_bounds);
             let fn_generics = render_generic_bounds(&bounds);
 
@@ -2101,8 +2130,10 @@ fn generate_static_getter(
     // Static getters take no receiver, so no `this` generic args
     // need plumbing — but the bounds still need redeclaring on the
     // `fn` for any type params mentioned by the return type.
-    let mut bounds = config.type_param_bounds();
-    bounds.extend(config.local_generic_bounds(getter.scope, &[&getter.type_ref]));
+    let promise_params =
+        CodegenContext::promise_type_params(&[&getter.type_ref], false, config.cgctx, getter.scope);
+    let mut bounds = config.type_param_bounds(&promise_params);
+    bounds.extend(config.local_generic_bounds(getter.scope, &[&getter.type_ref], &promise_params));
     let fn_generics = render_generic_bounds(&bounds);
 
     let source_name = &getter.js_name;
@@ -2176,9 +2207,15 @@ fn generate_static_setter(
             // list, but the bounds must still be redeclared on the
             // `fn` when the setter param mentions them. ABV bounds
             // last (see [`generate_setter`]).
-            let mut bounds = config.type_param_bounds();
+            let promise_params = CodegenContext::promise_type_params(
+                &sig.params.iter().map(|p| &p.type_ref).collect::<Vec<_>>(),
+                sig.is_async,
+                config.cgctx,
+                sig.body_scope,
+            );
+            let mut bounds = config.type_param_bounds(&promise_params);
             let sig_tys: Vec<&TypeRef> = sig.params.iter().map(|p| &p.type_ref).collect();
-            bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys));
+            bounds.extend(config.local_generic_bounds(sig.body_scope, &sig_tys, &promise_params));
             bounds.extend(abv_bounds);
             let fn_generics = render_generic_bounds(&bounds);
 

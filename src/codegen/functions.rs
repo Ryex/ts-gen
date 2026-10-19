@@ -186,9 +186,19 @@ fn generic_bounds_for_function(
     if names.is_empty() {
         return Vec::new();
     }
+    // A type parameter that is a promise's resolved value crosses the ABI
+    // as that value, so it is bounded by `FromWasmAbi` as well.
+    let sig_tys: Vec<&crate::ir::TypeRef> = sig
+        .params
+        .iter()
+        .map(|p| &p.type_ref)
+        .chain(std::iter::once(&sig.return_type))
+        .collect();
+    let promise_params =
+        CodegenContext::promise_type_params(&sig_tys, sig.is_async, Some(cgctx), sig.body_scope);
     names
         .iter()
-        .map(|n| CodegenContext::type_param_decl(Some(cgctx), n))
+        .map(|n| CodegenContext::type_param_decl(Some(cgctx), n, promise_params.contains(n)))
         .collect()
 }
 

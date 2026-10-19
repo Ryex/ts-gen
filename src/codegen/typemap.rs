@@ -448,13 +448,56 @@ impl<'a> CodegenContext<'a> {
 
     /// One type-parameter declaration: bare `T` under per-monomorphization
     /// (each instantiation picks its own ABI), `T: JsGeneric` otherwise.
-    pub(crate) fn type_param_decl(ctx: Option<&CodegenContext<'_>>, name: &str) -> TokenStream {
+    ///
+    /// A type parameter a promise mentions crosses the ABI as the promise's
+    /// resolved value, so it needs `FromWasmAbi` on top of the usual
+    /// bound.
+    pub(crate) fn type_param_decl(
+        ctx: Option<&CodegenContext<'_>>,
+        name: &str,
+        from_promise: bool,
+    ) -> TokenStream {
         let ident = make_ident(name);
         if Self::generic_mono(ctx) {
             quote! { #ident }
+        } else if from_promise {
+            quote! { #ident: ::wasm_bindgen::JsGeneric + ::wasm_bindgen::convert::FromWasmAbi }
         } else {
             quote! { #ident: ::wasm_bindgen::JsGeneric }
         }
+    }
+
+    /// The type parameters that cross the ABI as a promise's resolved value.
+    ///
+    /// A `Promise<T>` in a signature, and the return type of an `async`
+    /// function, both resolve to a value that is read back into Rust, so
+    /// those parameters need `FromWasmAbi` on top of the usual bound.
+    pub(crate) fn promise_type_params(
+        tys: &[&TypeRef],
+        async_return: bool,
+        cgctx: Option<&CodegenContext<'_>>,
+        scope: ScopeId,
+    ) -> Vec<String> {
+        let Some(cgctx) = cgctx else {
+            return Vec::new();
+        };
+        let mut names = Vec::new();
+        for ty in tys {
+            let Some(args) = ty.as_generic_head("Promise") else {
+                continue;
+            };
+            for arg in args {
+                crate::codegen::signatures::collect_type_params(arg, cgctx, scope, &mut names);
+            }
+        }
+        if async_return {
+            // The `async` function's own return type is the promise's
+            // resolved value.
+            if let Some(ty) = tys.last() {
+                crate::codegen::signatures::collect_type_params(ty, cgctx, scope, &mut names);
+            }
+        }
+        names
     }
 
     /// Whether `name`, resolved from `scope`, is a locally declared type
@@ -3693,11 +3736,11 @@ mod tests {
             assert!(!ctx.is_local_generic("Plain", scope));
             assert!(!ctx.is_local_generic("Array", scope));
             assert_eq!(
-                CodegenContext::type_param_decl(Some(ctx), "T").to_string(),
+                CodegenContext::type_param_decl(Some(ctx), "T", false).to_string(),
                 "T"
             );
             assert_eq!(
-                CodegenContext::type_param_decl(None, "T").to_string(),
+                CodegenContext::type_param_decl(None, "T", false).to_string(),
                 "T : :: wasm_bindgen :: JsGeneric"
             );
         });
