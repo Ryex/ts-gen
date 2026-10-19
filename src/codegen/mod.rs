@@ -229,6 +229,9 @@ fn with_unshared_views(
 /// Format Rust source via `rustfmt`.
 ///
 /// Falls back to `prettyplease` if `rustfmt` is not available.
+///
+/// The output's line endings are normalised to LF: `rustfmt` writes CRLF on
+/// Windows, which made the generated file differ between platforms.
 fn rustfmt(code: &str) -> anyhow::Result<String> {
     use std::io::Write;
     use std::process::{Command, Stdio};
@@ -251,10 +254,19 @@ fn rustfmt(code: &str) -> anyhow::Result<String> {
 
     let output = child.wait_with_output()?;
     if output.status.success() {
-        Ok(String::from_utf8(output.stdout)?)
+        Ok(normalise_line_endings(String::from_utf8(output.stdout)?))
     } else {
         let file = syn::parse_str::<syn::File>(code)?;
         Ok(prettyplease::unparse(&file))
+    }
+}
+
+/// Replace CRLF line endings with LF.
+fn normalise_line_endings(code: String) -> String {
+    if code.contains("\r\n") {
+        code.replace("\r\n", "\n")
+    } else {
+        code
     }
 }
 
