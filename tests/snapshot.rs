@@ -300,3 +300,30 @@ fn circular_type_alias_does_not_overflow_the_stack() {
         );
     }
 }
+
+/// The external uses of a synthesised union enum's members have to end up
+/// in the generated file, or it does not compile.
+#[test]
+fn union_enum_members_keep_their_external_uses() {
+    let fixture = crate_root().join("tests/fixtures/union-external.d.ts");
+    let out_dir = TempDir::new("union-external");
+    let out_file = out_dir.0.join("bindings.rs");
+    let output = Command::new(ts_gen_bin())
+        .arg("--input")
+        .arg(&fixture)
+        .arg("--output")
+        .arg(&out_file)
+        .output()
+        .expect("Failed to execute ts-gen binary");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let bindings = std::fs::read_to_string(&out_file).expect("Failed to read generated output");
+    assert!(
+        bindings.contains("use ::web_sys::Worker;"),
+        "the union member's external use is missing:\n{bindings}"
+    );
+    assert!(
+        bindings.contains("use JsValue as Widget;"),
+        "the union member's external use is missing:\n{bindings}"
+    );
+}

@@ -334,11 +334,14 @@ fn generate_tokens(
     let global_items = root.generate(&mut Vec::new(), &cgctx);
     cgctx.emit_path.replace(Vec::new());
 
-    let external_uses = cgctx.external_use_tokens();
-
     // Dynamic-union enums synthesised during the per-declaration
-    // emit pass.
+    // emit pass. They are generated before the external uses are
+    // collected: lowering a union member resolves its type name, which
+    // can register an external use the collected `use` statements would
+    // otherwise miss.
     let dynamic_unions = generate_dynamic_unions(&cgctx);
+
+    let external_uses = cgctx.external_use_tokens();
 
     cgctx.take_diagnostics().emit();
 
