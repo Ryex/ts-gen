@@ -263,3 +263,40 @@ fn typed_array_buffer_arguments_drop_without_a_warning() {
     assert!(output.status.success(), "{stderr}");
     assert!(!stderr.contains("warning"), "{stderr}");
 }
+
+/// A type alias whose target resolves back to the alias itself has no
+/// terminal type. Expanding it used to recurse forever and abort the
+/// process with a stack overflow.
+#[test]
+fn circular_type_alias_does_not_overflow_the_stack() {
+    // The shape every bundled `.d.ts` has, plus the hand-written cycles.
+    // TypeScript rejects all of them, so only "does not crash" is asserted.
+    let fixtures = [
+        "tests/fixtures/circular-alias.d.ts",
+        "tests/fixtures/circular/self.d.ts",
+        "tests/fixtures/circular/mutual.d.ts",
+        "tests/fixtures/circular/array.d.ts",
+        "tests/fixtures/circular/union.d.ts",
+        "tests/fixtures/circular/function.d.ts",
+        "tests/fixtures/circular/promise.d.ts",
+    ];
+    for fixture in fixtures {
+        let path = crate_root().join(fixture);
+        let extra_args = collect_directive_args(&path);
+        let out_dir = TempDir::new("circular-alias");
+        let output = Command::new(ts_gen_bin())
+            .arg("--input")
+            .arg(&path)
+            .arg("--output")
+            .arg(out_dir.0.join("bindings.rs"))
+            .args(&extra_args)
+            .output()
+            .expect("Failed to execute ts-gen binary");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(output.status.success(), "{fixture}: {stderr}");
+        assert!(
+            !stderr.contains("overflowed its stack"),
+            "{fixture}: {stderr}"
+        );
+    }
+}

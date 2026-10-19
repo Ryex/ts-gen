@@ -230,6 +230,11 @@ pub struct CodegenContext<'a> {
     /// The type parameters lowered while [`Self::alias_params`] probes an
     /// alias, innermost probe last.
     alias_param_mentions: RefCell<Vec<HashSet<String>>>,
+    /// The aliases whose target is being lowered right now, outermost
+    /// first. An alias whose target mentions the alias itself (`type A =
+    /// A[]`) is expanded once and its nested occurrence keeps the name as
+    /// written, instead of recursing forever.
+    alias_expansions: RefCell<Vec<String>>,
 }
 
 /// How a local generic alias's type parameters carry over to the Rust
@@ -699,6 +704,7 @@ impl<'a> CodegenContext<'a> {
             unresolved_module_refs: RefCell::new(HashSet::new()),
             alias_params: RefCell::new(HashMap::new()),
             alias_param_mentions: RefCell::new(Vec::new()),
+            alias_expansions: RefCell::new(Vec::new()),
         };
         for (spec, scopes) in &gctx.ambient_module_scopes {
             let path = ctx.specifier_path(spec);
@@ -741,6 +747,7 @@ impl<'a> CodegenContext<'a> {
             unresolved_module_refs: RefCell::new(HashSet::new()),
             alias_params: RefCell::new(HashMap::new()),
             alias_param_mentions: RefCell::new(Vec::new()),
+            alias_expansions: RefCell::new(Vec::new()),
         }
     }
 
@@ -860,6 +867,26 @@ impl<'a> CodegenContext<'a> {
         self.resolve_alias_impl(name, scope, &mut visited)
     }
 
+    /// Whether the alias `name` is already being expanded further up the
+    /// stack, i.e. its target mentions the alias itself.
+    pub(crate) fn is_expanding_alias(&self, name: &str) -> bool {
+        self.alias_expansions.borrow().iter().any(|n| n == name)
+    }
+
+    /// Mark the alias `name` as being expanded, so a target that mentions
+    /// it is not expanded again.
+    pub(crate) fn push_alias_expansion(&self, name: &str) {
+        self.alias_expansions.borrow_mut().push(name.to_string());
+    }
+
+    /// Undo [`Self::push_alias_expansion`].
+    pub(crate) fn pop_alias_expansion(&self, name: &str) {
+        let mut expansions = self.alias_expansions.borrow_mut();
+        if expansions.last().is_some_and(|n| n == name) {
+            expansions.pop();
+        }
+    }
+
     /// The string or numeric enum declaration `ty` names, through aliases
     /// and qualified paths.
     pub(crate) fn enum_kind(&self, ty: &ir::TypeRef, scope: ScopeId) -> Option<&TypeKind> {
@@ -936,8 +963,26 @@ impl<'a> CodegenContext<'a> {
         // If the target is itself a single-segment path, keep resolving.
         // Generic instantiations and qualified paths stop here.
         if let Some(inner_name) = target.as_ident() {
-            if let Some(resolved) = self.resolve_alias_impl(inner_name, scope, visited) {
-                return Some(resolved);
+            // A circular chain has no terminal type: the alias resolves to
+            // itself, so there is nothing to expand it to. Returning the
+            // target here would hand the caller the alias's own name back,
+            // and the caller would lower it again, forever.
+            if visited.contains(inner_name) {
+                self.warn(format!(
+                    "Type alias `{name}` is circular (`{inner_name}`), keeping the name as written"
+                ));
+                return None;
+            }
+            // Only an alias keeps the chain going. Anything else is the
+            // terminal type the chain resolves to, which is the target
+            // itself.
+            let inner_is_alias = self
+                .gctx
+                .scopes
+                .resolve(scope, inner_name)
+                .is_some_and(|id| matches!(self.gctx.get_type(id).kind, TypeKind::TypeAlias(_)));
+            if inner_is_alias {
+                return self.resolve_alias_impl(inner_name, scope, visited);
             }
         }
         Some(target)
@@ -1434,7 +1479,27 @@ pub fn to_syn_type(
                     }
                     if let Some(target) = c.resolve_alias(&segments[0], scope) {
                         let target = target.into_owned();
-                        return to_syn_type(&target, pos, ctx, scope, from_module);
+                        // The target may mention the alias itself (`type A =
+                        // A[]`). Expanding the alias again would recurse
+                        // forever, so the nested occurrence keeps the name
+                        // as written.
+                        if c.is_expanding_alias(&segments[0]) {
+                            return maybe_ref(
+                                lower_reference(
+                                    segments,
+                                    generic_args,
+                                    pos,
+                                    ctx,
+                                    scope,
+                                    from_module,
+                                ),
+                                borrow,
+                            );
+                        }
+                        c.push_alias_expansion(&segments[0]);
+                        let lowered = to_syn_type(&target, pos, ctx, scope, from_module);
+                        c.pop_alias_expansion(&segments[0]);
+                        return lowered;
                     }
                     // Synthesised enum names never collide with declared
                     // types. wasm-bindgen enums cross the boundary by value.
