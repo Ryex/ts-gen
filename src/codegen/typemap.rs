@@ -1314,7 +1314,15 @@ pub fn to_syn_type(
                 };
                 let elem = to_syn_type(inner, elem_pos, ctx, scope, from_module);
                 if pos.is_argument() {
-                    quote! { &[#elem] }
+                    // A slice of numbers is a view into wasm memory, and a
+                    // slice of anything else a view of the javascript's own
+                    // values. A string is neither: javascript owns its
+                    // strings, so the array is taken by value.
+                    if is_string_array_element(inner, ctx, scope) {
+                        quote! { Vec<#elem> }
+                    } else {
+                        quote! { &[#elem] }
+                    }
                 } else {
                     quote! { Vec<#elem> }
                 }
@@ -2819,6 +2827,21 @@ fn is_numeric_array_element(
     )
 }
 
+/// Whether a top-level `T[]` element lowers to a `String`.
+///
+/// A javascript string cannot be borrowed as a Rust `String`, so an array of
+/// them is taken by value rather than as a slice.
+fn is_string_array_element(
+    elem: &TypeRef,
+    ctx: Option<&CodegenContext<'_>>,
+    scope: ScopeId,
+) -> bool {
+    matches!(
+        native_array_leaf(elem, ctx, scope).as_ref(),
+        TypeRef::String | TypeRef::StringLiteral(_)
+    )
+}
+
 fn native_array_leaf<'t>(
     elem: &'t TypeRef,
     ctx: Option<&CodegenContext<'_>>,
@@ -3088,11 +3111,13 @@ mod tests {
 
     #[test]
     fn test_array_with_string() {
-        // Strings are owned inside the slice / Vec — `&str` would
-        // need a borrow lifetime, and `str` itself is unsized.
+        // Strings are owned inside the slice / Vec - `&str` would
+        // need a borrow lifetime, and `str` itself is unsized. A
+        // javascript string cannot be borrowed at all, so the array is
+        // taken by value.
         let ty = TypeRef::Array(Box::new(TypeRef::String));
         assert_eq!(ret_type(&ty), "Vec < String >");
-        assert_eq!(arg_type(&ty), "& [String]");
+        assert_eq!(arg_type(&ty), "Vec < String >");
     }
 
     #[test]
@@ -3950,7 +3975,8 @@ mod tests {
 
         let modes = TypeRef::Array(Box::new(TypeRef::ident("ModeAlias")));
         let levels = TypeRef::Array(Box::new(TypeRef::ident("Level")));
-        assert_eq!(lower(&modes, arg), "& [String]");
+        // A string element is owned: javascript owns its strings.
+        assert_eq!(lower(&modes, arg), "Vec < String >");
         assert_eq!(lower(&levels, ret), "Vec < f64 >");
         assert_eq!(
             lower(&TypeRef::generic("Promise", vec![region]), ret),

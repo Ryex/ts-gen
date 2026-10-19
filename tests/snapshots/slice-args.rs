@@ -62,12 +62,12 @@ extern "C" {
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {
-    pub fn strings(values: &[String]) -> String;
+    pub fn strings(values: Vec<String>) -> String;
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "strings")]
-    pub fn try_strings(values: &[String]) -> Result<String, JsValue>;
+    pub fn try_strings(values: Vec<String>) -> Result<String, JsValue>;
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {
@@ -301,12 +301,12 @@ extern "C" {
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {
-    pub fn spelled(values: &[String]) -> String;
+    pub fn spelled(values: Vec<String>) -> String;
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "spelled")]
-    pub fn try_spelled(values: &[String]) -> Result<String, JsValue>;
+    pub fn try_spelled(values: Vec<String>) -> Result<String, JsValue>;
 }
 #[wasm_bindgen(module = "slice-args")]
 extern "C" {

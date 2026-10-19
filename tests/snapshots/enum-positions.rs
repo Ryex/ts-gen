@@ -58,9 +58,9 @@ extern "C" {
         #[wasm_bindgen(slice = "array")] ls: &[f64],
     ) -> Result<Vec<f64>, JsValue>;
     #[wasm_bindgen(method)]
-    pub fn modes(this: &Probe, ms: &[String]) -> Vec<String>;
+    pub fn modes(this: &Probe, ms: Vec<String>) -> Vec<String>;
     #[wasm_bindgen(method, catch, js_name = "modes")]
-    pub fn try_modes(this: &Probe, ms: &[String]) -> Result<Vec<String>, JsValue>;
+    pub fn try_modes(this: &Probe, ms: Vec<String>) -> Result<Vec<String>, JsValue>;
     #[wasm_bindgen(method, js_name = "modeArray")]
     pub fn mode_array(this: &Probe, ms: &Array<JsString>) -> Array<JsString>;
     #[wasm_bindgen(method, catch, js_name = "modeArray")]

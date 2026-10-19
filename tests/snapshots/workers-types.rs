@@ -364,7 +364,7 @@ extern "C" {
     pub fn table_with_tabular_data_and_properties(
         this: &Console,
         tabular_data: &JsValue,
-        properties: &[String],
+        properties: Vec<String>,
     );
     #[doc = " The **`console.table()`** static method displays tabular data as a table."]
     #[doc = ""]
@@ -373,7 +373,7 @@ extern "C" {
     pub fn try_table_with_tabular_data_and_properties(
         this: &Console,
         tabular_data: &JsValue,
-        properties: &[String],
+        properties: Vec<String>,
     ) -> Result<(), JsValue>;
     #[doc = " The **`console.time()`** static method starts a timer you can use to track how long an operation takes."]
     #[doc = ""]
@@ -2595,13 +2595,13 @@ extern "C" {
     pub fn accept_web_socket_with_tags<Props: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectState<Props>,
         ws: &WebSocket,
-        tags: &[String],
+        tags: Vec<String>,
     );
     #[wasm_bindgen(method, catch, js_name = "acceptWebSocket")]
     pub fn try_accept_web_socket_with_tags<Props: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectState<Props>,
         ws: &WebSocket,
-        tags: &[String],
+        tags: Vec<String>,
     ) -> Result<(), JsValue>;
     #[wasm_bindgen(method, js_name = "getWebSockets")]
     pub fn get_web_sockets<Props: ::wasm_bindgen::JsGeneric>(
@@ -2733,12 +2733,12 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "get")]
     pub async fn get_with_keys<T: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectTransaction,
-        keys: &[String],
+        keys: Vec<String>,
     ) -> Result<Map<JsString, T>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "get")]
     pub async fn get_with_keys_and_options<T: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectTransaction,
-        keys: &[String],
+        keys: Vec<String>,
         options: &DurableObjectGetOptions,
     ) -> Result<Map<JsString, T>, JsValue>;
     #[wasm_bindgen(method, catch)]
@@ -2785,12 +2785,12 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_keys(
         this: &DurableObjectTransaction,
-        keys: &[String],
+        keys: Vec<String>,
     ) -> Result<Number, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_keys_and_options(
         this: &DurableObjectTransaction,
-        keys: &[String],
+        keys: Vec<String>,
         options: &DurableObjectPutOptions,
     ) -> Result<Number, JsValue>;
     #[wasm_bindgen(method)]
@@ -2853,12 +2853,12 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "get")]
     pub async fn get_with_keys<T: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectStorage,
-        keys: &[String],
+        keys: Vec<String>,
     ) -> Result<Map<JsString, T>, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "get")]
     pub async fn get_with_keys_and_options<T: ::wasm_bindgen::JsGeneric>(
         this: &DurableObjectStorage,
-        keys: &[String],
+        keys: Vec<String>,
         options: &DurableObjectGetOptions,
     ) -> Result<Map<JsString, T>, JsValue>;
     #[wasm_bindgen(method, catch)]
@@ -2905,12 +2905,12 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_keys(
         this: &DurableObjectStorage,
-        keys: &[String],
+        keys: Vec<String>,
     ) -> Result<Number, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "delete")]
     pub async fn delete_with_keys_and_options(
         this: &DurableObjectStorage,
-        keys: &[String],
+        keys: Vec<String>,
         options: &DurableObjectPutOptions,
     ) -> Result<Number, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "deleteAll")]
@@ -4670,7 +4670,7 @@ extern "C" {
         this: &SubtleCrypto,
         algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<JsValue, JsValue>;
     #[doc = " The **`generateKey()`** method of the SubtleCrypto interface is used to generate a new key (for symmetric algorithms) or key pair (for public-key algorithms)."]
     #[doc = ""]
@@ -4680,7 +4680,7 @@ extern "C" {
         this: &SubtleCrypto,
         algorithm: &SubtleCryptoGenerateKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<JsValue, JsValue>;
     #[doc = " The **`deriveKey()`** method of the SubtleCrypto interface can be used to derive a secret key from a master key."]
     #[doc = ""]
@@ -4692,7 +4692,7 @@ extern "C" {
         base_key: &CryptoKey,
         derived_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`deriveKey()`** method of the SubtleCrypto interface can be used to derive a secret key from a master key."]
     #[doc = ""]
@@ -4704,7 +4704,7 @@ extern "C" {
         base_key: &CryptoKey,
         derived_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`deriveKey()`** method of the SubtleCrypto interface can be used to derive a secret key from a master key."]
     #[doc = ""]
@@ -4716,7 +4716,7 @@ extern "C" {
         base_key: &CryptoKey,
         derived_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`deriveKey()`** method of the SubtleCrypto interface can be used to derive a secret key from a master key."]
     #[doc = ""]
@@ -4728,7 +4728,7 @@ extern "C" {
         base_key: &CryptoKey,
         derived_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`deriveBits()`** method of the key."]
     #[doc = ""]
@@ -4778,7 +4778,7 @@ extern "C" {
         key_data: &ArrayBuffer,
         algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`importKey()`** method of the SubtleCrypto interface imports a key: that is, it takes as input a key in an external, portable format and gives you a CryptoKey object that you can use in the Web Crypto API."]
     #[doc = ""]
@@ -4790,7 +4790,7 @@ extern "C" {
         key_data: &Object,
         algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`importKey()`** method of the SubtleCrypto interface imports a key: that is, it takes as input a key in an external, portable format and gives you a CryptoKey object that you can use in the Web Crypto API."]
     #[doc = ""]
@@ -4802,7 +4802,7 @@ extern "C" {
         key_data: &JsonWebKey,
         algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`importKey()`** method of the SubtleCrypto interface imports a key: that is, it takes as input a key in an external, portable format and gives you a CryptoKey object that you can use in the Web Crypto API."]
     #[doc = ""]
@@ -4814,7 +4814,7 @@ extern "C" {
         key_data: &ArrayBuffer,
         algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`importKey()`** method of the SubtleCrypto interface imports a key: that is, it takes as input a key in an external, portable format and gives you a CryptoKey object that you can use in the Web Crypto API."]
     #[doc = ""]
@@ -4826,7 +4826,7 @@ extern "C" {
         key_data: &Object,
         algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`importKey()`** method of the SubtleCrypto interface imports a key: that is, it takes as input a key in an external, portable format and gives you a CryptoKey object that you can use in the Web Crypto API."]
     #[doc = ""]
@@ -4838,7 +4838,7 @@ extern "C" {
         key_data: &JsonWebKey,
         algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`exportKey()`** method of the SubtleCrypto interface exports a key: that is, it takes as input a CryptoKey object and gives you the key in an external, portable format."]
     #[doc = ""]
@@ -4883,7 +4883,7 @@ extern "C" {
         unwrap_algorithm: &str,
         unwrapped_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4897,7 +4897,7 @@ extern "C" {
         unwrap_algorithm: &str,
         unwrapped_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4911,7 +4911,7 @@ extern "C" {
         unwrap_algorithm: &SubtleCryptoEncryptAlgorithm,
         unwrapped_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4925,7 +4925,7 @@ extern "C" {
         unwrap_algorithm: &SubtleCryptoEncryptAlgorithm,
         unwrapped_key_algorithm: &str,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4939,7 +4939,7 @@ extern "C" {
         unwrap_algorithm: &str,
         unwrapped_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4953,7 +4953,7 @@ extern "C" {
         unwrap_algorithm: &str,
         unwrapped_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4967,7 +4967,7 @@ extern "C" {
         unwrap_algorithm: &SubtleCryptoEncryptAlgorithm,
         unwrapped_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[doc = " The **`unwrapKey()`** method of the SubtleCrypto interface 'unwraps' a key."]
     #[doc = ""]
@@ -4981,7 +4981,7 @@ extern "C" {
         unwrap_algorithm: &SubtleCryptoEncryptAlgorithm,
         unwrapped_key_algorithm: &SubtleCryptoImportKeyAlgorithm,
         extractable: bool,
-        key_usages: &[String],
+        key_usages: Vec<String>,
     ) -> Result<CryptoKey, JsValue>;
     #[wasm_bindgen(method, js_name = "timingSafeEqual")]
     pub fn timing_safe_equal(this: &SubtleCrypto, a: &ArrayBuffer, b: &ArrayBuffer) -> bool;
@@ -5092,7 +5092,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn key_ops(this: &JsonWebKey) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_key_ops(this: &JsonWebKey, val: &[String]);
+    pub fn set_key_ops(this: &JsonWebKey, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn alg(this: &JsonWebKey) -> Option<String>;
     #[wasm_bindgen(method, setter)]
@@ -5172,7 +5172,7 @@ impl JsonWebKeyBuilder {
         self.inner.set_use(val);
         self
     }
-    pub fn key_ops(self, val: &[String]) -> Self {
+    pub fn key_ops(self, val: Vec<String>) -> Self {
         self.inner.set_key_ops(val);
         self
     }
@@ -9065,7 +9065,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn include(this: &R2ListOptions) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_include(this: &R2ListOptions, val: &[String]);
+    pub fn set_include(this: &R2ListOptions, val: Vec<String>);
 }
 impl R2ListOptions {
     pub fn new() -> R2ListOptions {
@@ -9101,7 +9101,7 @@ impl R2ListOptionsBuilder {
         self.inner.set_start_after(val);
         self
     }
-    pub fn include(self, val: &[String]) -> Self {
+    pub fn include(self, val: Vec<String>) -> Self {
         self.inner.set_include(val);
         self
     }
@@ -9256,7 +9256,10 @@ extern "C" {
     #[wasm_bindgen(method, catch)]
     pub async fn delete(this: &R2Bucket, keys: &str) -> Result<Undefined, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "delete")]
-    pub async fn delete_with_slice(this: &R2Bucket, keys: &[String]) -> Result<Undefined, JsValue>;
+    pub async fn delete_with_slice(
+        this: &R2Bucket,
+        keys: Vec<String>,
+    ) -> Result<Undefined, JsValue>;
     #[wasm_bindgen(method, catch)]
     pub async fn list(this: &R2Bucket) -> Result<JsValue, JsValue>;
     #[wasm_bindgen(method, catch, js_name = "list")]
@@ -13061,7 +13064,7 @@ extern "C" {
     #[wasm_bindgen(constructor, catch)]
     pub fn new(url: &str) -> Result<WebSocket, JsValue>;
     #[wasm_bindgen(constructor, catch, js_name = "WebSocket")]
-    pub fn new_with_slice(url: &str, protocols: &[String]) -> Result<WebSocket, JsValue>;
+    pub fn new_with_slice(url: &str, protocols: Vec<String>) -> Result<WebSocket, JsValue>;
     #[wasm_bindgen(constructor, catch, js_name = "WebSocket")]
     pub fn new_with_str(url: &str, protocols: &str) -> Result<WebSocket, JsValue>;
     # [wasm_bindgen (static_method_of = WebSocket , getter , js_name = "READY_STATE_CONNECTING")]
@@ -13312,7 +13315,7 @@ extern "C" {
     #[wasm_bindgen(method, setter, js_name = "columnNames")]
     pub fn set_column_names<T: ::wasm_bindgen::JsGeneric>(
         this: &SqlStorageCursor<T>,
-        val: &[String],
+        val: Vec<String>,
     );
     #[wasm_bindgen(method, getter, js_name = "rowsRead")]
     pub fn rows_read<T: ::wasm_bindgen::JsGeneric>(this: &SqlStorageCursor<T>) -> f64;
@@ -13659,7 +13662,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn entrypoint(this: &ContainerStartupOptions) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_entrypoint(this: &ContainerStartupOptions, val: &[String]);
+    pub fn set_entrypoint(this: &ContainerStartupOptions, val: Vec<String>);
     #[wasm_bindgen(method, getter, js_name = "enableInternet")]
     pub fn enable_internet(this: &ContainerStartupOptions) -> bool;
     #[wasm_bindgen(method, setter, js_name = "enableInternet")]
@@ -13689,7 +13692,7 @@ pub struct ContainerStartupOptionsBuilder {
     inner: ContainerStartupOptions,
 }
 impl ContainerStartupOptionsBuilder {
-    pub fn entrypoint(self, val: &[String]) -> Self {
+    pub fn entrypoint(self, val: Vec<String>) -> Self {
         self.inner.set_entrypoint(val);
         self
     }
@@ -14152,7 +14155,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "compatibilityFlags")]
     pub fn compatibility_flags(this: &WorkerLoaderWorkerCode) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter, js_name = "compatibilityFlags")]
-    pub fn set_compatibility_flags(this: &WorkerLoaderWorkerCode, val: &[String]);
+    pub fn set_compatibility_flags(this: &WorkerLoaderWorkerCode, val: Vec<String>);
     #[wasm_bindgen(method, getter, js_name = "allowExperimental")]
     pub fn allow_experimental(this: &WorkerLoaderWorkerCode) -> Option<bool>;
     #[wasm_bindgen(method, setter, js_name = "allowExperimental")]
@@ -14206,7 +14209,7 @@ pub struct WorkerLoaderWorkerCodeBuilder {
     inner: WorkerLoaderWorkerCode,
 }
 impl WorkerLoaderWorkerCodeBuilder {
-    pub fn compatibility_flags(self, val: &[String]) -> Self {
+    pub fn compatibility_flags(self, val: Vec<String>) -> Self {
         self.inner.set_compatibility_flags(val);
         self
     }
@@ -14983,10 +14986,10 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn text(this: &AiMultimodalEmbeddingsInput) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_text(this: &AiMultimodalEmbeddingsInput, val: &[String]);
+    pub fn set_text(this: &AiMultimodalEmbeddingsInput, val: Vec<String>);
 }
 impl AiMultimodalEmbeddingsInput {
-    pub fn new(image: &str, text: &[String]) -> AiMultimodalEmbeddingsInput {
+    pub fn new(image: &str, text: Vec<String>) -> AiMultimodalEmbeddingsInput {
         let inner: AiMultimodalEmbeddingsInput = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_image(image);
         inner.set_text(text);
@@ -15080,10 +15083,10 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn sentences(this: &AiSentenceSimilarityInput) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_sentences(this: &AiSentenceSimilarityInput, val: &[String]);
+    pub fn set_sentences(this: &AiSentenceSimilarityInput, val: Vec<String>);
 }
 impl AiSentenceSimilarityInput {
-    pub fn new(source: &str, sentences: &[String]) -> AiSentenceSimilarityInput {
+    pub fn new(source: &str, sentences: Vec<String>) -> AiSentenceSimilarityInput {
         let inner: AiSentenceSimilarityInput = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_source(source);
         inner.set_sentences(sentences);
@@ -15310,7 +15313,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &AiTextEmbeddingsInput, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &AiTextEmbeddingsInput, val: &[String]);
+    pub fn set_text_with_slice(this: &AiTextEmbeddingsInput, val: Vec<String>);
 }
 impl AiTextEmbeddingsInput {
     pub fn new(text: &str) -> AiTextEmbeddingsInput {
@@ -15318,7 +15321,7 @@ impl AiTextEmbeddingsInput {
         inner.set_text(text);
         inner
     }
-    pub fn new_with_slice(text: &[String]) -> AiTextEmbeddingsInput {
+    pub fn new_with_slice(text: Vec<String>) -> AiTextEmbeddingsInput {
         let inner: AiTextEmbeddingsInput = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_text_with_slice(text);
         inner
@@ -16177,7 +16180,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn include(this: &ResponsesInput) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_include(this: &ResponsesInput, val: &[String]);
+    pub fn set_include(this: &ResponsesInput, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn input(this: &ResponsesInput) -> Option<InputKind>;
     #[wasm_bindgen(method, setter)]
@@ -16284,7 +16287,7 @@ impl ResponsesInputBuilder {
             .set_conversation_with_response_conversation_param(val);
         self
     }
-    pub fn include(self, val: &[String]) -> Self {
+    pub fn include(self, val: Vec<String>) -> Self {
         self.inner.set_include(val);
         self
     }
@@ -19121,7 +19124,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Baai_Bge_Base_En_V1_5_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Base_En_V1_5_Input, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Base_En_V1_5_Input, val: Vec<String>);
     #[doc = " The pooling method used in the embedding process. `cls` pooling will generate more accurate embeddings on larger inputs - however, embeddings created with cls pooling are not compatible with embeddings generated with mean pooling. The default pooling method is `mean` in order for this to not be a breaking change, but we highly suggest using the new `cls` pooling for better accuracy."]
     #[wasm_bindgen(method, getter)]
     pub fn pooling(this: &Ai_Cf_Baai_Bge_Base_En_V1_5_Input) -> Option<PoolingKind>;
@@ -19151,7 +19154,7 @@ impl Ai_Cf_Baai_Bge_Base_En_V1_5_InputBuilder {
         self.inner.set_text(val);
         self
     }
-    pub fn text_with_slice(self, val: &[String]) -> Self {
+    pub fn text_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_text_with_slice(val);
         self
     }
@@ -19424,7 +19427,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Baai_Bge_Small_En_V1_5_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Small_En_V1_5_Input, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Small_En_V1_5_Input, val: Vec<String>);
     #[doc = " The pooling method used in the embedding process. `cls` pooling will generate more accurate embeddings on larger inputs - however, embeddings created with cls pooling are not compatible with embeddings generated with mean pooling. The default pooling method is `mean` in order for this to not be a breaking change, but we highly suggest using the new `cls` pooling for better accuracy."]
     #[wasm_bindgen(method, getter)]
     pub fn pooling(this: &Ai_Cf_Baai_Bge_Small_En_V1_5_Input) -> Option<PoolingKind>;
@@ -19454,7 +19457,7 @@ impl Ai_Cf_Baai_Bge_Small_En_V1_5_InputBuilder {
         self.inner.set_text(val);
         self
     }
-    pub fn text_with_slice(self, val: &[String]) -> Self {
+    pub fn text_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_text_with_slice(val);
         self
     }
@@ -19537,7 +19540,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Baai_Bge_Large_En_V1_5_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Large_En_V1_5_Input, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_Large_En_V1_5_Input, val: Vec<String>);
     #[doc = " The pooling method used in the embedding process. `cls` pooling will generate more accurate embeddings on larger inputs - however, embeddings created with cls pooling are not compatible with embeddings generated with mean pooling. The default pooling method is `mean` in order for this to not be a breaking change, but we highly suggest using the new `cls` pooling for better accuracy."]
     #[wasm_bindgen(method, getter)]
     pub fn pooling(this: &Ai_Cf_Baai_Bge_Large_En_V1_5_Input) -> Option<PoolingKind>;
@@ -19567,7 +19570,7 @@ impl Ai_Cf_Baai_Bge_Large_En_V1_5_InputBuilder {
         self.inner.set_text(val);
         self
     }
-    pub fn text_with_slice(self, val: &[String]) -> Self {
+    pub fn text_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_text_with_slice(val);
         self
     }
@@ -20003,7 +20006,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding, val: Vec<String>);
     #[doc = " When provided with too long context should the model error out or truncate the context to fit?"]
     #[wasm_bindgen(method, getter)]
     pub fn truncate_inputs(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding) -> Option<bool>;
@@ -20014,7 +20017,7 @@ impl Ai_Cf_Baai_Bge_M3_Input_Embedding {
     pub fn new(text: &str) -> Ai_Cf_Baai_Bge_M3_Input_Embedding {
         Self::builder(text).build()
     }
-    pub fn new_with_slice(text: &[String]) -> Ai_Cf_Baai_Bge_M3_Input_Embedding {
+    pub fn new_with_slice(text: Vec<String>) -> Ai_Cf_Baai_Bge_M3_Input_Embedding {
         Self::builder_with_slice(text).build()
     }
     pub fn builder(text: &str) -> Ai_Cf_Baai_Bge_M3_Input_EmbeddingBuilder {
@@ -20023,7 +20026,7 @@ impl Ai_Cf_Baai_Bge_M3_Input_Embedding {
         inner.set_text(text);
         Ai_Cf_Baai_Bge_M3_Input_EmbeddingBuilder { inner }
     }
-    pub fn builder_with_slice(text: &[String]) -> Ai_Cf_Baai_Bge_M3_Input_EmbeddingBuilder {
+    pub fn builder_with_slice(text: Vec<String>) -> Ai_Cf_Baai_Bge_M3_Input_EmbeddingBuilder {
         let inner: Ai_Cf_Baai_Bge_M3_Input_Embedding =
             JsCast::unchecked_into(js_sys::Object::new());
         inner.set_text_with_slice(text);
@@ -20102,7 +20105,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding_1, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding_1, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding_1, val: Vec<String>);
     #[doc = " When provided with too long context should the model error out or truncate the context to fit?"]
     #[wasm_bindgen(method, getter)]
     pub fn truncate_inputs(this: &Ai_Cf_Baai_Bge_M3_Input_Embedding_1) -> Option<bool>;
@@ -20113,7 +20116,7 @@ impl Ai_Cf_Baai_Bge_M3_Input_Embedding_1 {
     pub fn new(text: &str) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1 {
         Self::builder(text).build()
     }
-    pub fn new_with_slice(text: &[String]) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1 {
+    pub fn new_with_slice(text: Vec<String>) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1 {
         Self::builder_with_slice(text).build()
     }
     pub fn builder(text: &str) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1Builder {
@@ -20122,7 +20125,7 @@ impl Ai_Cf_Baai_Bge_M3_Input_Embedding_1 {
         inner.set_text(text);
         Ai_Cf_Baai_Bge_M3_Input_Embedding_1Builder { inner }
     }
-    pub fn builder_with_slice(text: &[String]) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1Builder {
+    pub fn builder_with_slice(text: Vec<String>) -> Ai_Cf_Baai_Bge_M3_Input_Embedding_1Builder {
         let inner: Ai_Cf_Baai_Bge_M3_Input_Embedding_1 =
             JsCast::unchecked_into(js_sys::Object::new());
         inner.set_text_with_slice(text);
@@ -25599,7 +25602,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_queries(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "queries")]
-    pub fn set_queries_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &[String]);
+    pub fn set_queries_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: Vec<String>);
     #[doc = " Optional instruction for the task"]
     #[wasm_bindgen(method, getter)]
     pub fn instruction(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input) -> Option<String>;
@@ -25610,13 +25613,13 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_documents(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "documents")]
-    pub fn set_documents_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &[String]);
+    pub fn set_documents_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn text(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input) -> Option<TextKind>;
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input, val: Vec<String>);
 }
 impl Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input {
     pub fn new() -> Ai_Cf_Qwen_Qwen3_Embedding_0_6B_Input {
@@ -25636,7 +25639,7 @@ impl Ai_Cf_Qwen_Qwen3_Embedding_0_6B_InputBuilder {
         self.inner.set_queries(val);
         self
     }
-    pub fn queries_with_slice(self, val: &[String]) -> Self {
+    pub fn queries_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_queries_with_slice(val);
         self
     }
@@ -25648,7 +25651,7 @@ impl Ai_Cf_Qwen_Qwen3_Embedding_0_6B_InputBuilder {
         self.inner.set_documents(val);
         self
     }
-    pub fn documents_with_slice(self, val: &[String]) -> Self {
+    pub fn documents_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_documents_with_slice(val);
         self
     }
@@ -25656,7 +25659,7 @@ impl Ai_Cf_Qwen_Qwen3_Embedding_0_6B_InputBuilder {
         self.inner.set_text(val);
         self
     }
-    pub fn text_with_slice(self, val: &[String]) -> Self {
+    pub fn text_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_text_with_slice(val);
         self
     }
@@ -26234,7 +26237,7 @@ extern "C" {
     #[wasm_bindgen(method, setter, js_name = "text")]
     pub fn set_text_with_slice(
         this: &Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Input,
-        val: &[String],
+        val: Vec<String>,
     );
     #[doc = " Target language to translate to"]
     #[wasm_bindgen(method, getter)]
@@ -26260,7 +26263,7 @@ impl Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Input {
     #[doc = " * `text` - Input text to translate. Can be a single string or a list of strings."]
     #[doc = " * `target_language` - Target language to translate to"]
     pub fn new_with_slice(
-        text: &[String],
+        text: Vec<String>,
         target_language: &str,
     ) -> Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Input {
         let inner: Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Input =
@@ -26279,11 +26282,14 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn translations(this: &Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_translations(this: &Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output, val: &[String]);
+    pub fn set_translations(
+        this: &Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output,
+        val: Vec<String>,
+    );
 }
 impl Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output {
     #[doc = " * `translations` - Translated texts"]
-    pub fn new(translations: &[String]) -> Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output {
+    pub fn new(translations: Vec<String>) -> Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output {
         let inner: Ai_Cf_Ai4Bharat_Indictrans2_En_Indic_1B_Output =
             JsCast::unchecked_into(js_sys::Object::new());
         inner.set_translations(translations);
@@ -27540,7 +27546,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_text(this: &Ai_Cf_Pfnet_Plamo_Embedding_1B_Input, val: &str);
     #[wasm_bindgen(method, setter, js_name = "text")]
-    pub fn set_text_with_slice(this: &Ai_Cf_Pfnet_Plamo_Embedding_1B_Input, val: &[String]);
+    pub fn set_text_with_slice(this: &Ai_Cf_Pfnet_Plamo_Embedding_1B_Input, val: Vec<String>);
 }
 impl Ai_Cf_Pfnet_Plamo_Embedding_1B_Input {
     #[doc = " * `text` - Input text to embed. Can be a single string or a list of strings."]
@@ -27551,7 +27557,7 @@ impl Ai_Cf_Pfnet_Plamo_Embedding_1B_Input {
         inner
     }
     #[doc = " * `text` - Input text to embed. Can be a single string or a list of strings."]
-    pub fn new_with_slice(text: &[String]) -> Ai_Cf_Pfnet_Plamo_Embedding_1B_Input {
+    pub fn new_with_slice(text: Vec<String>) -> Ai_Cf_Pfnet_Plamo_Embedding_1B_Input {
         let inner: Ai_Cf_Pfnet_Plamo_Embedding_1B_Input =
             JsCast::unchecked_into(js_sys::Object::new());
         inner.set_text_with_slice(text);
@@ -28711,7 +28717,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn tags(this: &AiOptions) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_tags(this: &AiOptions, val: &[String]);
+    pub fn set_tags(this: &AiOptions, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn gateway(this: &AiOptions) -> Option<GatewayOptions>;
     #[wasm_bindgen(method, setter)]
@@ -28751,7 +28757,7 @@ impl AiOptionsBuilder {
         self.inner.set_websocket(val);
         self
     }
-    pub fn tags(self, val: &[String]) -> Self {
+    pub fn tags(self, val: Vec<String>) -> Self {
         self.inner.set_tags(val);
         self
     }
@@ -28883,7 +28889,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn tags(this: &AiModelsSearchObject) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_tags(this: &AiModelsSearchObject, val: &[String]);
+    pub fn set_tags(this: &AiModelsSearchObject, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn properties(this: &AiModelsSearchObject) -> Vec<Object>;
     #[wasm_bindgen(method, setter)]
@@ -28896,7 +28902,7 @@ impl AiModelsSearchObject {
         name: &str,
         description: &str,
         task: &Object,
-        tags: &[String],
+        tags: Vec<String>,
         properties: &[Object],
     ) -> AiModelsSearchObject {
         let inner: AiModelsSearchObject = JsCast::unchecked_into(js_sys::Object::new());
@@ -30550,7 +30556,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "cacheTags")]
     pub fn cache_tags(this: &RequestInitCfProperties) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter, js_name = "cacheTags")]
-    pub fn set_cache_tags(this: &RequestInitCfProperties, val: &[String]);
+    pub fn set_cache_tags(this: &RequestInitCfProperties, val: Vec<String>);
     #[doc = " Force response to be cached for a given number of seconds. (e.g. 300)"]
     #[wasm_bindgen(method, getter, js_name = "cacheTtl")]
     pub fn cache_ttl(this: &RequestInitCfProperties) -> Option<f64>;
@@ -30628,7 +30634,7 @@ impl RequestInitCfPropertiesBuilder {
         self.inner.set_cache_key(val);
         self
     }
-    pub fn cache_tags(self, val: &[String]) -> Self {
+    pub fn cache_tags(self, val: Vec<String>) -> Self {
         self.inner.set_cache_tags(val);
         self
     }
@@ -33823,7 +33829,7 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_to(this: &SendEmailBuilder, val: &str);
     #[wasm_bindgen(method, setter, js_name = "to")]
-    pub fn set_to_with_slice(this: &SendEmailBuilder, val: &[String]);
+    pub fn set_to_with_slice(this: &SendEmailBuilder, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn subject(this: &SendEmailBuilder) -> String;
     #[wasm_bindgen(method, setter)]
@@ -33839,13 +33845,13 @@ extern "C" {
     #[wasm_bindgen(method, setter)]
     pub fn set_cc(this: &SendEmailBuilder, val: &str);
     #[wasm_bindgen(method, setter, js_name = "cc")]
-    pub fn set_cc_with_slice(this: &SendEmailBuilder, val: &[String]);
+    pub fn set_cc_with_slice(this: &SendEmailBuilder, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn bcc(this: &SendEmailBuilder) -> Option<TextKind>;
     #[wasm_bindgen(method, setter)]
     pub fn set_bcc(this: &SendEmailBuilder, val: &str);
     #[wasm_bindgen(method, setter, js_name = "bcc")]
-    pub fn set_bcc_with_slice(this: &SendEmailBuilder, val: &[String]);
+    pub fn set_bcc_with_slice(this: &SendEmailBuilder, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn headers(this: &SendEmailBuilder) -> Option<Object<JsString>>;
     #[wasm_bindgen(method, setter)]
@@ -33867,7 +33873,7 @@ impl SendEmailBuilder {
     pub fn new(from: &str, to: &str, subject: &str) -> SendEmailBuilder {
         Self::builder(from, to, subject).build()
     }
-    pub fn new_with_str_and_slice(from: &str, to: &[String], subject: &str) -> SendEmailBuilder {
+    pub fn new_with_str_and_slice(from: &str, to: Vec<String>, subject: &str) -> SendEmailBuilder {
         Self::builder_with_str_and_slice(from, to, subject).build()
     }
     pub fn new_with_email_address_and_str(
@@ -33879,7 +33885,7 @@ impl SendEmailBuilder {
     }
     pub fn new_with_email_address_and_slice(
         from: &EmailAddress,
-        to: &[String],
+        to: Vec<String>,
         subject: &str,
     ) -> SendEmailBuilder {
         Self::builder_with_email_address_and_slice(from, to, subject).build()
@@ -33893,7 +33899,7 @@ impl SendEmailBuilder {
     }
     pub fn builder_with_str_and_slice(
         from: &str,
-        to: &[String],
+        to: Vec<String>,
         subject: &str,
     ) -> SendEmailBuilderBuilder {
         let inner: SendEmailBuilder = JsCast::unchecked_into(js_sys::Object::new());
@@ -33915,7 +33921,7 @@ impl SendEmailBuilder {
     }
     pub fn builder_with_email_address_and_slice(
         from: &EmailAddress,
-        to: &[String],
+        to: Vec<String>,
         subject: &str,
     ) -> SendEmailBuilderBuilder {
         let inner: SendEmailBuilder = JsCast::unchecked_into(js_sys::Object::new());
@@ -33941,7 +33947,7 @@ impl SendEmailBuilderBuilder {
         self.inner.set_cc(val);
         self
     }
-    pub fn cc_with_slice(self, val: &[String]) -> Self {
+    pub fn cc_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_cc_with_slice(val);
         self
     }
@@ -33949,7 +33955,7 @@ impl SendEmailBuilderBuilder {
         self.inner.set_bcc(val);
         self
     }
-    pub fn bcc_with_slice(self, val: &[String]) -> Self {
+    pub fn bcc_with_slice(self, val: Vec<String>) -> Self {
         self.inner.set_bcc_with_slice(val);
         self
     }
@@ -35444,7 +35450,7 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn variants(this: &ImageMetadata) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_variants(this: &ImageMetadata, val: &[String]);
+    pub fn set_variants(this: &ImageMetadata, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn draft(this: &ImageMetadata) -> Option<bool>;
     #[wasm_bindgen(method, setter)]
@@ -35455,13 +35461,13 @@ extern "C" {
     pub fn set_creator(this: &ImageMetadata, val: &str);
 }
 impl ImageMetadata {
-    pub fn new(id: &str, require_signed_ur_ls: bool, variants: &[String]) -> ImageMetadata {
+    pub fn new(id: &str, require_signed_ur_ls: bool, variants: Vec<String>) -> ImageMetadata {
         Self::builder(id, require_signed_ur_ls, variants).build()
     }
     pub fn builder(
         id: &str,
         require_signed_ur_ls: bool,
-        variants: &[String],
+        variants: Vec<String>,
     ) -> ImageMetadataBuilder {
         let inner: ImageMetadata = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_id(id);
@@ -37325,7 +37331,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "allowedOrigins")]
     pub fn allowed_origins(this: &StreamVideo) -> Vec<String>;
     #[wasm_bindgen(method, setter, js_name = "allowedOrigins")]
-    pub fn set_allowed_origins(this: &StreamVideo, val: &[String]);
+    pub fn set_allowed_origins(this: &StreamVideo, val: Vec<String>);
     #[doc = " Indicates whether signed URLs are required."]
     #[wasm_bindgen(method, getter, js_name = "requireSignedURLs")]
     pub fn require_signed_ur_ls(this: &StreamVideo) -> Option<bool>;
@@ -37429,7 +37435,7 @@ impl StreamVideo {
         modified: &str,
         scheduled_deletion: &str,
         size: f64,
-        allowed_origins: &[String],
+        allowed_origins: Vec<String>,
         require_signed_ur_ls: bool,
         uploaded: &str,
         upload_expiry: &str,
@@ -37509,7 +37515,7 @@ impl StreamVideo {
         modified: &str,
         scheduled_deletion: &str,
         size: f64,
-        allowed_origins: &[String],
+        allowed_origins: Vec<String>,
         require_signed_ur_ls: bool,
         uploaded: &str,
         upload_expiry: &str,
@@ -37783,7 +37789,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "allowedOrigins")]
     pub fn allowed_origins(this: &StreamDirectUploadCreateParams) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter, js_name = "allowedOrigins")]
-    pub fn set_allowed_origins(this: &StreamDirectUploadCreateParams, val: &[String]);
+    pub fn set_allowed_origins(this: &StreamDirectUploadCreateParams, val: Vec<String>);
     #[doc = " Indicates whether the video can be accessed using the id. When set to `true`,"]
     #[doc = " a signed token must be generated with a signing key to view the video."]
     #[wasm_bindgen(method, getter, js_name = "requireSignedURLs")]
@@ -37835,7 +37841,7 @@ impl StreamDirectUploadCreateParamsBuilder {
         self.inner.set_meta(val);
         self
     }
-    pub fn allowed_origins(self, val: &[String]) -> Self {
+    pub fn allowed_origins(self, val: Vec<String>) -> Self {
         self.inner.set_allowed_origins(val);
         self
     }
@@ -37889,7 +37895,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "allowedOrigins")]
     pub fn allowed_origins(this: &StreamUrlUploadParams) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter, js_name = "allowedOrigins")]
-    pub fn set_allowed_origins(this: &StreamUrlUploadParams, val: &[String]);
+    pub fn set_allowed_origins(this: &StreamUrlUploadParams, val: Vec<String>);
     #[doc = " A user-defined identifier for the media creator."]
     #[wasm_bindgen(method, getter)]
     pub fn creator(this: &StreamUrlUploadParams) -> Option<String>;
@@ -37945,7 +37951,7 @@ pub struct StreamUrlUploadParamsBuilder {
     inner: StreamUrlUploadParams,
 }
 impl StreamUrlUploadParamsBuilder {
-    pub fn allowed_origins(self, val: &[String]) -> Self {
+    pub fn allowed_origins(self, val: Vec<String>) -> Self {
         self.inner.set_allowed_origins(val);
         self
     }
@@ -38276,7 +38282,7 @@ extern "C" {
     #[wasm_bindgen(method, getter, js_name = "allowedOrigins")]
     pub fn allowed_origins(this: &StreamUpdateVideoParams) -> Option<Vec<String>>;
     #[wasm_bindgen(method, setter, js_name = "allowedOrigins")]
-    pub fn set_allowed_origins(this: &StreamUpdateVideoParams, val: &[String]);
+    pub fn set_allowed_origins(this: &StreamUpdateVideoParams, val: Vec<String>);
     #[doc = " A user-defined identifier for the media creator."]
     #[wasm_bindgen(method, getter)]
     pub fn creator(this: &StreamUpdateVideoParams) -> Option<String>;
@@ -38335,7 +38341,7 @@ pub struct StreamUpdateVideoParamsBuilder {
     inner: StreamUpdateVideoParams,
 }
 impl StreamUpdateVideoParamsBuilder {
-    pub fn allowed_origins(self, val: &[String]) -> Self {
+    pub fn allowed_origins(self, val: Vec<String>) -> Self {
         self.inner.set_allowed_origins(val);
         self
     }
@@ -40545,14 +40551,14 @@ extern "C" {
     #[wasm_bindgen(method, getter)]
     pub fn ids(this: &VectorizeVectorMutation) -> Vec<String>;
     #[wasm_bindgen(method, setter)]
-    pub fn set_ids(this: &VectorizeVectorMutation, val: &[String]);
+    pub fn set_ids(this: &VectorizeVectorMutation, val: Vec<String>);
     #[wasm_bindgen(method, getter)]
     pub fn count(this: &VectorizeVectorMutation) -> f64;
     #[wasm_bindgen(method, setter)]
     pub fn set_count(this: &VectorizeVectorMutation, val: f64);
 }
 impl VectorizeVectorMutation {
-    pub fn new(ids: &[String], count: f64) -> VectorizeVectorMutation {
+    pub fn new(ids: Vec<String>, count: f64) -> VectorizeVectorMutation {
         let inner: VectorizeVectorMutation = JsCast::unchecked_into(js_sys::Object::new());
         inner.set_ids(ids);
         inner.set_count(count);
@@ -40685,7 +40691,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "deleteByIds")]
     pub async fn delete_by_ids(
         this: &VectorizeIndex,
-        ids: &[String],
+        ids: Vec<String>,
     ) -> Result<VectorizeVectorMutation, JsValue>;
     #[doc = " Get a list of vectors with a matching id."]
     #[doc = ""]
@@ -40695,7 +40701,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "getByIds")]
     pub async fn get_by_ids(
         this: &VectorizeIndex,
-        ids: &[String],
+        ids: Vec<String>,
     ) -> Result<Array<VectorizeVector>, JsValue>;
 }
 #[wasm_bindgen]
@@ -40828,7 +40834,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "deleteByIds")]
     pub async fn delete_by_ids(
         this: &Vectorize,
-        ids: &[String],
+        ids: Vec<String>,
     ) -> Result<VectorizeAsyncMutation, JsValue>;
     #[doc = " Get a list of vectors with a matching id."]
     #[doc = ""]
@@ -40838,7 +40844,7 @@ extern "C" {
     #[wasm_bindgen(method, catch, js_name = "getByIds")]
     pub async fn get_by_ids(
         this: &Vectorize,
-        ids: &[String],
+        ids: Vec<String>,
     ) -> Result<Array<VectorizeVector>, JsValue>;
 }
 #[wasm_bindgen]

@@ -136,21 +136,21 @@ extern "C" {
 }
 #[wasm_bindgen(module = "nested-arrays")]
 extern "C" {
-    pub fn ids(values: &[String]) -> Vec<String>;
+    pub fn ids(values: Vec<String>) -> Vec<String>;
 }
 #[wasm_bindgen(module = "nested-arrays")]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "ids")]
-    pub fn try_ids(values: &[String]) -> Result<Vec<String>, JsValue>;
+    pub fn try_ids(values: Vec<String>) -> Result<Vec<String>, JsValue>;
 }
 #[wasm_bindgen(module = "nested-arrays")]
 extern "C" {
-    pub fn modes(values: &[String]) -> Vec<String>;
+    pub fn modes(values: Vec<String>) -> Vec<String>;
 }
 #[wasm_bindgen(module = "nested-arrays")]
 extern "C" {
     #[wasm_bindgen(catch, js_name = "modes")]
-    pub fn try_modes(values: &[String]) -> Result<Vec<String>, JsValue>;
+    pub fn try_modes(values: Vec<String>) -> Result<Vec<String>, JsValue>;
 }
 #[wasm_bindgen(module = "nested-arrays")]
 extern "C" {
