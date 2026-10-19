@@ -399,13 +399,21 @@ fn generate_dynamic_unions(cgctx: &CodegenContext) -> TokenStream {
                             quote! { #variant_ident = #sign #lit }
                         }
                         _ => {
-                            let payload = typemap::to_syn_type(
-                                m,
-                                typemap::TypePosition::RETURN,
-                                Some(cgctx),
-                                info.scope,
-                                &info.from_module,
-                            );
+                            let payload =
+                                if typemap::CodegenContext::is_string_enum(m, cgctx, info.scope) {
+                                    // A string enum has no `TryFromJsValue`, so
+                                    // it cannot be a dynamic union's payload. The
+                                    // union carries the string instead.
+                                    quote! { String }
+                                } else {
+                                    typemap::to_syn_type(
+                                        m,
+                                        typemap::TypePosition::RETURN,
+                                        Some(cgctx),
+                                        info.scope,
+                                        &info.from_module,
+                                    )
+                                };
                             quote! { #variant_ident(#payload) }
                         }
                     }

@@ -500,6 +500,27 @@ impl<'a> CodegenContext<'a> {
         names
     }
 
+    /// Whether a type reference names a string enum.
+    ///
+    /// A string enum has no `TryFromJsValue`, so it cannot be a dynamic
+    /// union's payload.
+    pub(crate) fn is_string_enum(ty: &TypeRef, cgctx: &CodegenContext<'_>, scope: ScopeId) -> bool {
+        let TypeRef::Reference {
+            segments,
+            generic_args,
+        } = ty
+        else {
+            return false;
+        };
+        if !generic_args.is_empty() {
+            return false;
+        }
+        let Some(id) = cgctx.gctx.resolve_path(scope, &segments.join(".")) else {
+            return false;
+        };
+        matches!(cgctx.gctx.get_type(id).kind, TypeKind::StringEnum(_))
+    }
+
     /// Whether `name`, resolved from `scope`, is a locally declared type
     /// with at least one type parameter, i.e. one whose generic arguments
     /// survive into the output. Resolution goes through the scope chain so

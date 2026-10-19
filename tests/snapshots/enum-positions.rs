@@ -108,18 +108,18 @@ extern "C" {
 }
 #[wasm_bindgen(private)]
 pub enum ModeOrNumberReturnKind {
-    Mode(Mode),
+    Mode(String),
     F64(f64),
 }
 #[wasm_bindgen(private)]
 pub enum ModeOrStringReturnKind {
-    Mode(Mode),
+    Mode(String),
     String(String),
 }
 #[wasm_bindgen(private)]
 pub enum ModeOrRegionReturnKind {
-    Mode(Mode),
-    Region(codes::Region),
+    Mode(String),
+    Region(String),
 }
 #[wasm_bindgen(private)]
 pub enum LevelOrStringReturnKind {

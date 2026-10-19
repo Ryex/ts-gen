@@ -149,6 +149,6 @@ extern "C" {
 }
 #[wasm_bindgen(private)]
 pub enum ModeOrNumberReturnKind {
-    Mode(Mode),
+    Mode(String),
     F64(f64),
 }

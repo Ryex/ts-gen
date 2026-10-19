@@ -41626,7 +41626,7 @@ pub enum ServiceTierKind {
 }
 #[wasm_bindgen(private)]
 pub enum ToolChoiceKind {
-    ToolChoiceOptions(ToolChoiceOptions),
+    ToolChoiceOptions(String),
     ToolChoiceFunction(ToolChoiceFunction),
 }
 #[wasm_bindgen(private)]
@@ -41949,7 +41949,7 @@ pub enum CfAigSkipCacheKind {
 }
 #[wasm_bindgen(private)]
 pub enum ProviderKind {
-    AiGatewayProviders(AIGatewayProviders),
+    AiGatewayProviders(String),
     String(String),
 }
 #[wasm_bindgen(private)]
@@ -42068,7 +42068,7 @@ pub enum TlsClientAuthKind {
 }
 #[wasm_bindgen(private)]
 pub enum CountryKind {
-    Iso3166Alpha2Code(Iso3166Alpha2Code),
+    Iso3166Alpha2Code(String),
     T1 = "T1",
 }
 #[wasm_bindgen(private)]
@@ -42240,7 +42240,7 @@ pub enum AttributeValueKind {
 #[wasm_bindgen(private)]
 pub enum ReturnMetadataKind {
     Bool(bool),
-    VectorizeMetadataRetrievalLevel(VectorizeMetadataRetrievalLevel),
+    VectorizeMetadataRetrievalLevel(String),
 }
 #[wasm_bindgen(private)]
 pub enum ValuesKind {
